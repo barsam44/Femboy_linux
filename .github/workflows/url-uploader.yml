@@ -1,0 +1,46 @@
+name: Upload file from URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'Direct URL of the file to download'
+        required: true
+        type: string
+      filename:
+        description: 'Optional custom filename (with extension)'
+        required: false
+        type: string
+        default: ''
+
+jobs:
+  download-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to push the new file
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download file
+        run: |
+          if [ -z "${{ inputs.filename }}" ]; then
+            # extract filename from URL
+            fname=$(basename "${{ inputs.url }}")
+            # remove query strings if any
+            fname=$(echo "$fname" | cut -d '?' -f 1)
+          else
+            fname="${{ inputs.filename }}"
+          fi
+          echo "Downloading ${{ inputs.url }} → uploads/$fname"
+          mkdir -p uploads
+          curl -L -o "uploads/$fname" "${{ inputs.url }}"
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add uploads/
+          git commit -m "Add file from ${{ inputs.url }}" || echo "No changes to commit"
+          git push
