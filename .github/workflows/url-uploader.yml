@@ -17,19 +17,17 @@ jobs:
   download-and-commit:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # needed to push the new file
+      contents: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true   # opt into Node 24 now, silences warning
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Download file
         run: |
           if [ -z "${{ inputs.filename }}" ]; then
-            # extract filename from URL
-            fname=$(basename "${{ inputs.url }}")
-            # remove query strings if any
-            fname=$(echo "$fname" | cut -d '?' -f 1)
+            fname=$(basename "${{ inputs.url }}" | cut -d '?' -f 1)
           else
             fname="${{ inputs.filename }}"
           fi
@@ -37,10 +35,17 @@ jobs:
           mkdir -p uploads
           curl -L -o "uploads/$fname" "${{ inputs.url }}"
 
-      - name: Commit and push
+      - name: Commit and push if changed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add uploads/
-          git commit -m "Add file from ${{ inputs.url }}" || echo "No changes to commit"
-          git push
+
+          # Only commit and push if there are actual changes
+          if git diff --staged --quiet; then
+            echo "✅ No changes detected (file identical to existing one). Nothing to commit."
+          else
+            git commit -m "Add/update file from ${{ inputs.url }}"
+            git push
+            echo "✅ File committed and pushed."
+          fi
