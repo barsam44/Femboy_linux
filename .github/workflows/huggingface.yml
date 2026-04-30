@@ -1,0 +1,102 @@
+name: Find AI Models (1B to 100M)
+on:
+  workflow_dispatch:  # اجرای دستی
+  schedule:
+    - cron: '0 0 * * 0'  # هر یکشنبه نیمه‌شب
+  push:
+    branches: [ main ]
+
+jobs:
+  find-models:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 huggingface-hub
+
+      - name: Find models from Hugging Face
+        run: |
+          python << 'EOF'
+          import requests
+          from huggingface_hub import HfApi, ModelFilter
+          import json
+
+          api = HfApi()
+          
+          print("🔍 جستجوی مدل‌های 100M تا 1B پارامتر...\n")
+          
+          models_found = []
+          
+          # جستجو در Hugging Face با فیلتر
+          try:
+              models = api.list_models(
+                  filter=ModelFilter(
+                      task="text-generation",
+                  ),
+                  sort="downloads",
+                  direction=-1,
+                  limit=50
+              )
+              
+              for model in models:
+                  # پارامترها رو از config بخون
+                  try:
+                      config = json.loads(requests.get(
+                          f"https://huggingface.co/{model.id}/raw/main/config.json",
+                          timeout=5
+                      ).text)
+                      
+                      params = config.get("num_parameters", 0)
+                      if params == 0:
+                          # اگر num_parameters نبود، از model_card بخون
+                          card = api.model_info(model.id).cardData
+                          if hasattr(card, 'model_params'):
+                              params = card.model_params
+                  except:
+                      params = 0
+                  
+                  # فیلتر بر اساس سایز
+                  if 100_000_000 <= params <= 1_000_000_000:
+                      download_link = f"https://huggingface.co/{model.id}"
+                      models_found.append({
+                          "name": model.id,
+                          "params": f"{params:,}",
+                          "download": download_link,
+                          "likes": model.likes
+                      })
+                      
+          except Exception as e:
+              print(f"❌ خطا در جستجو: {e}")
+          
+          # چاپ نتایج
+          if models_found:
+              print(f"✅ {len(models_found)} مدل پیدا شد:\n")
+              for i, model in enumerate(models_found, 1):
+                  print(f"{i}. {model['name']}")
+                  print(f"   📊 پارامترها: {model['params']}")
+                  print(f"   ⭐ لایک‌ها: {model['likes']}")
+                  print(f"   🔗 دانلود: {model['download']}\n")
+          else:
+              print("⚠️ مدلی در این رنج پیدا نشد!")
+              
+          # ذخیره در فایل
+          with open('models_list.json', 'w') as f:
+              json.dump(models_found, f, indent=2)
+              
+          print("📁 لیست کامل در models_list.json ذخیره شد.")
+          EOF
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-models-list
+          path: |
+            models_list.json
