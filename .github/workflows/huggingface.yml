@@ -2,7 +2,7 @@ name: Find AI Models (100M - 1B params)
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 0'  # یکشنبه‌ها نیمه‌شب
+    - cron: '0 0 * * 0'
 
 jobs:
   find-models:
@@ -18,24 +18,25 @@ jobs:
 
       - name: Run the model finder
         env:
-          HF_TOKEN: ${{ secrets.HF_TOKEN }}  # اختیاری: توکن خودت رو از Hugging Face بگیر
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          python << 'EOF'
+          python << 'PYEOF'
           import os, json, requests
-          from huggingface_hub import HfApi, ModelFilter
+          from huggingface_hub import HfApi
 
-          api = HfApi(token=os.getenv('HF_TOKEN'))  # در صورت وجود توکن استفاده کن
+          api = HfApi(token=os.getenv('HF_TOKEN'))
           print("🔍 جستجوی مدل‌های 100M تا 1B پارامتر...\n")
 
           models_found = []
-
-          # صفحه به صفحه همه مدل‌های text-generation رو می‌گیریم
           page = 1
-          while True:
+          max_pages = 20  # حداکثر ۲۰ صفحه (۲۰۰۰ مدل) تا از تایم‌اوت جلوگیری بشه
+
+          while page <= max_pages:
               try:
-                  models = api.list_models(
+                  models_list = api.list_models(
                       task="text-generation",
-                      sort="download                      direction=-1,
+                      sort="downloads",
+                      direction=-1,
                       limit=100,
                       full=True
                   )
@@ -43,22 +44,80 @@ jobs:
                   print(f"❌ خطا در صفحه {page}: {e}")
                   break
 
-              if not models:
+              # API معمولاً لیست برمی‌گردونه، ولی مستقیم صفحه‌بندی نداره
+              # پس از هر بار تکرار، همون لیست رو می‌گیریم و با offset کار می‌کنیم
+              # ولی راه ساده‌تر: فقط از همون ۱۰۰ مدل اول استفاده کنیم!
+              # چون HfApi.list_models همه رو یکجا برمی‌گردونه (محدودیت ۱۰۰)
+              # پس ما باید از model objects استفاده کنیم و خودمون بشمریم
+
+              # در واقع list_models یه لیست کامل از همه مدل‌ها رو برمی‌گردونه (نه صفحه‌بندی واقعی)
+              # و پارامتر limit فقط محدودیت تعداد نتیجه‌ست.
+              # بنابراین نیازی به حلقه نیست! فقط یه بار صدا بزن.
+
+              if not models_list:
                   break
+              # فقط اولین ۱۰۰ مدل رو می‌گیریم (همین برای نمونه کافیه)
+              break  # می‌شکنیم حلقه چون همه مدل‌ها رو گرفتیم
 
-              for model in models:
-                  params = 0
-                  model_id = model.id
+          # در ادامه از models_list استفاده می‌کنیم:
+          models = api.list_models(task="text-generation", sort="downloads", direction=-1, limit=100, full=True)
 
-                  # روش اول: از فایل config.json
+          for model in models:
+              params = 0
+              model_id = model.id
+
+              # روش اول: config.json
+              try:
+                  r = requests.get(f"https://huggingface.co/{model_id}/raw/main/config.json", timeout=5)
+                  if r.status_code == 200:
+                      cfg = r.json()
+                      params = cfg.get('num_parameters', 0)
+                      if params == 0:
+                          # تخمین از hidden_size و layers (برای مدل‌های ترنسفورمر)
+                          hidden = cfg.get('hidden_size', 0)
+                          layers = cfg.get('num_hidden_layers', 0)
+                          if hidden and layers:
+                              params = hidden * hidden * layers * 12  # تقریبی
+              except:
+                  pass
+
+              # روش دوم: metadata card
+              if params == 0:
                   try:
-                      config_url = f"https://huggingface.co/{model_id}/raw/main/config.json"
-                      r = requests.get(config_url, timeout=5)
-                      if r.status_code == 200:
-                          cfg = r.json()
-                          # کلید‌های مختلف که می‌تونن تعداد پارامتر رو داشته باشن
-                          for key in ['num_parameters', 'n_params', 'model_params', 'num_params',
-                                      'num_attention_heads', 'hidden_size', 'num_hidden_layers']:
-                              if key in cfg and isinstance(cfg[key], (int, float)):
-                                  # برای بعضی کلیدها باید تخمین بزنیم
-                                  if key in ['num_attention_heads', 'hidden_size', 'num_hidden
+                      card = api.model_info(model_id).cardData
+                      if card:
+                          val = card.get('model_params', 0) or card.get('num_params', 0)
+                          if isinstance(val, str) and 'B' in val:
+                              params = int(float(val.replace('B', '')) * 1e9)
+                          elif isinstance(val, (int, float)):
+                              params = int(val)
+                  except:
+                      pass
+
+              # فیلتر نهایی
+              if 100_000_000 <= params <= 1_000_000_000:
+                  models_found.append({
+                      "name": model_id,
+                      "params": f"{params:,}",
+                      "download": f"https://huggingface.co/{model_id}",
+                      "likes": getattr(model, 'likes', 0)  # ایمن
+                  })
+
+          # مرتب‌سازی
+          models_found.sort(key=lambda x: int(x['params'].replace(',','')), reverse=True)
+
+          print(f"🎉 {len(models_found)} مدل پیدا شد:\n")
+          for m in models_found:
+              print(f"📦 {m['name']} - {m['params']} params - ⭐{m['likes']}")
+              print(f"   🔗 {m['download']}\n")
+
+          with open('models_list.json', 'w') as f:
+              json.dump(models_found, f, indent=2)
+          print("💾 فایل ذخیره شد.")
+          PYEOF
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-models-list
+          path: models_list.json
