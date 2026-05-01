@@ -1,0 +1,125 @@
+name: Build ParisaOS Installer with Xen Kernel 6.1
+
+on:
+  workflow_dispatch:
+
+env:
+  BUILDROOT_VERSION: "2024.02.9"
+  KERNEL_VERSION: "6.1.120"
+  XEN_VERSION: "4.18.1"
+
+jobs:
+  build-installer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential libncurses-dev bison flex libssl-dev bc \
+            unzip rsync cpio xorriso isolinux fdisk mtools
+
+      - name: Cache Buildroot source
+        uses: actions/cache@v4
+        with:
+          path: buildroot
+          key: buildroot-${{ env.BUILDROOT_VERSION }}-xen
+
+      - name: Download Buildroot
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          wget https://buildroot.org/downloads/buildroot-${{ env.BUILDROOT_VERSION }}.tar.gz
+          tar xzf buildroot-${{ env.BUILDROOT_VERSION }}.tar.gz
+          mv buildroot-${{ env.BUILDROOT_VERSION }} buildroot
+
+      - name: Configure ParisaOS with Xen and Kernel 6.1
+        run: |
+          cd buildroot
+          # Start with QEMU x86_64 base
+          make qemu_x86_64_defconfig
+
+          # --- System identity ---
+          echo "BR2_TARGET_GENERIC_HOSTNAME=\"parisa-os\"" >> .config
+          echo "BR2_TARGET_GENERIC_ISSUE=\"Welcome to ParisaOS Installer Edition\"" >> .config
+
+          # --- Xen Hypervisor ---
+          echo "BR2_PACKAGE_XEN=y" >> .config
+          echo "BR2_PACKAGE_XEN_TOOLS=y" >> .config
+          echo "BR2_PACKAGE_XEN_HYPERVISOR=y" >> .config
+          echo "BR2_PACKAGE_BASH=y" >> .config  # Xen tools need bash
+
+          # --- Custom Linux Kernel 6.1 with Xen support ---
+          echo "BR2_LINUX_KERNEL=y" >> .config
+          echo "BR2_LINUX_KERNEL_CUSTOM_VERSION=y" >> .config
+          echo "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE=\"${{ env.KERNEL_VERSION }}\"" >> .config
+          echo "BR2_LINUX_KERNEL_DEFCONFIG=\"x86_64\"" >> .config
+          
+          # Enable Xen kernel options via fragment
+          cat >> .config << 'EOF'
+          BR2_LINUX_KERNEL_CONFIG_FRAGMENT="xen-kernel-fragment.config"
+          EOF
+          
+          # Create the kernel fragment for Xen support
+          cat > xen-kernel-fragment.config << 'KERNEL_FRAG'
+          CONFIG_XEN=y
+          CONFIG_XEN_DOM0=y
+          CONFIG_XEN_PVHVM=y
+          CONFIG_XEN_BLKDEV_FRONTEND=y
+          CONFIG_XEN_NETDEV_FRONTEND=y
+          CONFIG_XEN_PCIDEV_FRONTEND=y
+          CONFIG_HYPERVISOR_GUEST=y
+          CONFIG_PARAVIRT=y
+          CONFIG_PARAVIRT_XXL=y
+          KERNEL_FRAG
+
+          # --- Filesystem for bootable ISO ---
+          echo "BR2_TARGET_ROOTFS_ISO9660=y" >> .config
+          echo "BR2_TARGET_ROOTFS_ISO9660_BOOT_MENU=\"ParisaOS Installer\"" >> .config
+          echo "BR2_TARGET_ROOTFS_ISO9660_INITRD=y" >> .config
+
+          # --- X11 and JWM ---
+          echo "BR2_PACKAGE_XORG7=y" >> .config
+          echo "BR2_PACKAGE_XSERVER_XORG_SERVER=y" >> .config
+          echo "BR2_PACKAGE_JWM=y" >> .config
+          echo "BR2_PACKAGE_XTERM=y" >> .config
+          echo "BR2_PACKAGE_XINIT=y" >> .config
+
+          # --- Tools ---
+          echo "BR2_PACKAGE_BUSYBOX=y" >> .config
+          echo "BR2_PACKAGE_BASH=y" >> .config
+          echo "BR2_PACKAGE_UTIL_LINUX=y" >> .config
+          echo "BR2_PACKAGE_E2FSPROGS=y" >> .config
+          echo "BR2_PACKAGE_UTIL_LINUX_BIN_FDISK=y" >> .config
+
+          # Finalize
+          make olddefconfig
+
+      - name: Build the system
+        run: |
+          cd buildroot
+          make -j$(nproc) 2>&1 | tee build.log
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p output-artifacts
+          cd buildroot/output/images
+          
+          # Copy ISO and kernel
+          cp rootfs.iso9660 ../../output-artifacts/ParisaOS-Installer-Xen-6.1.iso
+          cp bzImage ../../output-artifacts/
+          cp rootfs.tar ../../output-artifacts/
+          
+          # If Xen was built, include it
+          if [ -f xen ]; then
+            cp xen ../../output-artifacts/
+            cp xen.config ../../output-artifacts/ 2>/dev/null || true
+          fi
+          
+          # Include build log
+          cp ../../build.log ../../output-artifacts/
+
+      - name: Upload ParisaOS Installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ParisaOS-Installer-Xen-6.1
+          path: output-artifacts/
