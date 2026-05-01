@@ -18,7 +18,27 @@ jobs:
           sudo apt-get install -y \
             build-essential libncurses-dev bison flex libssl-dev bc \
             unzip rsync cpio xorriso isolinux fdisk mtools
-
+      - name: Commit build log to repo
+        if: always()   # run even if previous steps failed
+        shell: bash
+        run: |
+          # Copy the full log to a known filename
+          cp buildroot/build.log log.txt
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Fetch latest main branch to avoid conflicts
+          git fetch origin main
+          git checkout main
+          git pull --rebase origin main
+          
+          # Stage and commit
+          git add log.txt
+          git commit -m "Update build log" || echo "No changes to commit"
+          
+          # Push back to main
+          git push origin main
       - name: Cache Buildroot source
         uses: actions/cache@v4
         with:
