@@ -1,102 +1,64 @@
-name: Find AI Models (1B to 100M)
+name: Find AI Models (100M - 1B params)
 on:
-  workflow_dispatch:  # اجرای دستی
+  workflow_dispatch:
   schedule:
-    - cron: '0 0 * * 0'  # هر یکشنبه نیمه‌شب
-  push:
-    branches: [ main ]
+    - cron: '0 0 * * 0'  # یکشنبه‌ها نیمه‌شب
 
 jobs:
   find-models:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install requests beautifulsoup4 huggingface-hub
+        run: pip install huggingface_hub requests
 
-      - name: Find models from Hugging Face
+      - name: Run the model finder
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}  # اختیاری: توکن خودت رو از Hugging Face بگیر
         run: |
           python << 'EOF'
-          import requests
+          import os, json, requests
           from huggingface_hub import HfApi, ModelFilter
-          import json
 
-          api = HfApi()
-          
+          api = HfApi(token=os.getenv('HF_TOKEN'))  # در صورت وجود توکن استفاده کن
           print("🔍 جستجوی مدل‌های 100M تا 1B پارامتر...\n")
-          
-          models_found = []
-          
-          # جستجو در Hugging Face با فیلتر
-          try:
-              models = api.list_models(
-                  filter=ModelFilter(
-                      task="text-generation",
-                  ),
-                  sort="downloads",
-                  direction=-1,
-                  limit=50
-              )
-              
-              for model in models:
-                  # پارامترها رو از config بخون
-                  try:
-                      config = json.loads(requests.get(
-                          f"https://huggingface.co/{model.id}/raw/main/config.json",
-                          timeout=5
-                      ).text)
-                      
-                      params = config.get("num_parameters", 0)
-                      if params == 0:
-                          # اگر num_parameters نبود، از model_card بخون
-                          card = api.model_info(model.id).cardData
-                          if hasattr(card, 'model_params'):
-                              params = card.model_params
-                  except:
-                      params = 0
-                  
-                  # فیلتر بر اساس سایز
-                  if 100_000_000 <= params <= 1_000_000_000:
-                      download_link = f"https://huggingface.co/{model.id}"
-                      models_found.append({
-                          "name": model.id,
-                          "params": f"{params:,}",
-                          "download": download_link,
-                          "likes": model.likes
-                      })
-                      
-          except Exception as e:
-              print(f"❌ خطا در جستجو: {e}")
-          
-          # چاپ نتایج
-          if models_found:
-              print(f"✅ {len(models_found)} مدل پیدا شد:\n")
-              for i, model in enumerate(models_found, 1):
-                  print(f"{i}. {model['name']}")
-                  print(f"   📊 پارامترها: {model['params']}")
-                  print(f"   ⭐ لایک‌ها: {model['likes']}")
-                  print(f"   🔗 دانلود: {model['download']}\n")
-          else:
-              print("⚠️ مدلی در این رنج پیدا نشد!")
-              
-          # ذخیره در فایل
-          with open('models_list.json', 'w') as f:
-              json.dump(models_found, f, indent=2)
-              
-          print("📁 لیست کامل در models_list.json ذخیره شد.")
-          EOF
 
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        with:
-          name: ai-models-list
-          path: |
-            models_list.json
+          models_found = []
+
+          # صفحه به صفحه همه مدل‌های text-generation رو می‌گیریم
+          page = 1
+          while True:
+              try:
+                  models = api.list_models(
+                      task="text-generation",
+                      sort="download                      direction=-1,
+                      limit=100,
+                      full=True
+                  )
+              except Exception as e:
+                  print(f"❌ خطا در صفحه {page}: {e}")
+                  break
+
+              if not models:
+                  break
+
+              for model in models:
+                  params = 0
+                  model_id = model.id
+
+                  # روش اول: از فایل config.json
+                  try:
+                      config_url = f"https://huggingface.co/{model_id}/raw/main/config.json"
+                      r = requests.get(config_url, timeout=5)
+                      if r.status_code == 200:
+                          cfg = r.json()
+                          # کلید‌های مختلف که می‌تونن تعداد پارامتر رو داشته باشن
+                          for key in ['num_parameters', 'n_params', 'model_params', 'num_params',
+                                      'num_attention_heads', 'hidden_size', 'num_hidden_layers']:
+                              if key in cfg and isinstance(cfg[key], (int, float)):
+                                  # برای بعضی کلیدها باید تخمین بزنیم
+                                  if key in ['num_attention_heads', 'hidden_size', 'num_hidden
