@@ -1,7 +1,7 @@
 name: Build ParisaOS Installer with Xen Kernel 6.1
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # trigger manually
 
 env:
   BUILDROOT_VERSION: "2024.02.9"
@@ -15,7 +15,7 @@ jobs:
       contents: write          # needed to push log.txt
 
     steps:
-      # --- NEW: Checkout your repo so git commands work ---
+      # --- MUST BE FIRST: so git commands work ---
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -91,7 +91,7 @@ jobs:
 
           make olddefconfig
 
-      # --- FIXED: Build with pipefail to detect make errors ---
+      # --- Build with pipefail to detect errors ---
       - name: Build the system
         shell: bash
         run: |
@@ -99,9 +99,53 @@ jobs:
           cd buildroot
           make -j$(nproc) 2>&1 | tee build.log
 
-      # --- MOVED: Commit build log to repo (now it runs after Build) ---
+      # --- Create ISO manually (bypasses post-image script) ---
+      - name: Create bootable ISO
+        if: always()   # run even if the build step had errors
+        run: |
+          cd buildroot/output/images
+          # Make sure the necessary files exist
+          if [ ! -f rootfs.ext2 ] || [ ! -f bzImage ]; then
+            echo "Missing rootfs or kernel image. Skipping ISO creation."
+            exit 0
+          fi
+
+          # Create isolinux folder and configuration
+          mkdir -p iso/boot/isolinux
+          cat > iso/boot/isolinux/isolinux.cfg << 'CFG'
+          default linux
+          label linux
+            kernel /boot/bzImage
+            append root=/dev/sr0 ro init=/sbin/init
+          CFG
+          cp bzImage iso/boot/
+          cp rootfs.ext2 iso/
+
+          # Build the ISO with xorriso
+          xorriso -as mkisofs \
+            -o ParisaOS-Installer-Xen-6.1.iso \
+            -b boot/isolinux/isolinux.bin \
+            -c boot/isolinux/boot.cat \
+            -no-emul-boot \
+            -boot-load-size 4 \
+            -boot-info-table \
+            -R -J -V "ParisaOS Installer" \
+            iso/
+
+          # Prepare artifacts folder
+          mkdir -p ../../output-artifacts
+          cp ParisaOS-Installer-Xen-6.1.iso ../../output-artifacts/
+          cp bzImage ../../output-artifacts/
+          cp rootfs.ext2 ../../output-artifacts/
+          # Copy Xen hypervisor if it was built
+          if [ -f ../xen/xen ]; then
+            cp ../xen/xen ../../output-artifacts/
+          fi
+          cp ../../build.log ../../output-artifacts/
+
+      # --- Commit log to repo so you can see errors easily ---
       - name: Commit build log to repo
-        if: always()   # run even if Build fails
+        if: always()
         run: |
           cp buildroot/build.log log.txt
           git config user.name "github-actions[bot]"
@@ -110,19 +154,7 @@ jobs:
           git commit -m "🤖 Update build log" || echo "No changes to commit"
           git push origin main
 
-      - name: Prepare artifacts
-        run: |
-          mkdir -p output-artifacts
-          cd buildroot/output/images
-          cp rootfs.iso9660 ../../output-artifacts/ParisaOS-Installer-Xen-6.1.iso || true
-          cp bzImage ../../output-artifacts/ || true
-          cp rootfs.tar ../../output-artifacts/ || true
-          if [ -f xen ]; then
-            cp xen ../../output-artifacts/
-            cp xen.config ../../output-artifacts/ 2>/dev/null || true
-          fi
-          cp ../../build.log ../../output-artifacts/ || true
-
+      # --- Upload everything as a downloadable zip ---
       - name: Upload ParisaOS Installer
         uses: actions/upload-artifact@v4
         with:
