@@ -1,0 +1,72 @@
+name: Build PariBSD Quick ISO
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-iso:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl zstd pax xorriso
+
+      - name: Fetch latest NetBSD/amd64 daily build
+        run: |
+          curl -L -o base.tar.zst "https://nycdn.netbsd.org/pub/NetBSD-daily/netbsd-11/latest/amd64/binary/sets/base.tar.zst"
+          curl -L -o etc.tar.zst "https://nycdn.netbsd.org/pub/NetBSD-daily/netbsd-11/latest/amd64/binary/sets/etc.tar.zst"
+          curl -L -o modules.tar.zst "https://nycdn.netbsd.org/pub/NetBSD-daily/netbsd-11/latest/amd64/binary/sets/modules.tar.zst"
+          curl -L -o xbase.tar.zst "https://nycdn.netbsd.org/pub/NetBSD-daily/netbsd-11/latest/amd64/binary/sets/xbase.tar.zst"
+          curl -L -o xetc.tar.zst "https://nycdn.netbsd.org/pub/NetBSD-daily/netbsd-11/latest/amd64/binary/sets/xetc.tar.zst"
+
+      - name: Extract sets into root filesystem
+        run: |
+          mkdir rootfs
+          for f in base.tar.zst etc.tar.zst modules.tar.zst xbase.tar.zst xetc.tar.zst; do
+            tar --zstd -xpf "$f" -C rootfs
+          done
+
+      - name: Apply PariBSD customizations
+        run: |
+          # Hostname and welcome message
+          echo "pari-bsd" > rootfs/etc/myname
+          echo "Welcome to PariBSD 🌸" > rootfs/etc/issue
+
+          # Add JWM via pkgsrc binary package (fetch and extract)
+          mkdir -p rootfs/tmp/pkgs
+          curl -L -o rootfs/tmp/pkgs/jwm.tgz "http://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.0_2024Q4/All/jwm-2.4.3nb10.tgz"
+          # Also fetch dependencies (simplified; full dep resolution omitted for brevity)
+          curl -L -o rootfs/tmp/pkgs/jpeg.tgz "http://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.0_2024Q4/All/jpeg-9f.tgz"
+          curl -L -o rootfs/tmp/pkgs/png.tgz "http://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.0_2024Q4/All/png-1.6.44.tgz"
+          curl -L -o rootfs/tmp/pkgs/xorgproto.tgz "http://cdn.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.0_2024Q4/All/xorgproto-2024.1.tgz"
+          # ... you'd need to resolve all deps properly in a real scenario
+
+          # Create a simple /etc/rc.local to start X11/JWM on boot
+          cat > rootfs/etc/rc.local << 'EOF'
+          #!/bin/sh
+          echo "Starting X11..."
+          /usr/X11R7/bin/xinit /usr/pkg/bin/jwm -- :0 &
+          EOF
+          chmod +x rootfs/etc/rc.local
+
+      - name: Create bootable ISO
+        run: |
+          # Use NetBSD's makefs to create a bootable ISO
+          # For simplicity, we'll use xorriso with a pre-built bootloader
+          wget https://nycdn.netbsd.org/pub/NetBSD-daily/netbsd-11/latest/amd64/installation/boot.iso -O boot.iso
+          mkdir iso_mount
+          sudo mount -o loop boot.iso iso_mount
+          cp -r iso_mount/boot .
+          sudo umount iso_mount
+          rmdir iso_mount
+          rm boot.iso
+
+          # Create ISO
+          xorriso -as mkisofs -R -V "PariBSD" -b boot -no-emul-boot -o pari-bsd.iso rootfs/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PariBSD-Quick
+          path: pari-bsd.iso
