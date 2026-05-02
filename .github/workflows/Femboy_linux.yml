@@ -1,4 +1,4 @@
-name: Build ParisaOS with Xen 6.1 (Fixed)
+name: Build ParisaOS (No ISO target – stable)
 
 on:
   workflow_dispatch:
@@ -30,7 +30,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: buildroot
-          key: buildroot-${{ env.BUILDROOT_VERSION }}-xen
+          key: buildroot-${{ env.BUILDROOT_VERSION }}-v2
 
       - name: Download Buildroot
         if: steps.cache.outputs.cache-hit != 'true'
@@ -80,9 +80,6 @@ jobs:
 
           echo "BR2_PACKAGE_XDRIVER_XF86_VIDEO_INTEL=y" >> .config
           echo "BR2_PACKAGE_XDRIVER_XF86_VIDEO_NOUVEAU=y" >> .config
-          echo "BR2_TARGET_ROOTFS_ISO9660=y" >> .config
-          echo "BR2_TARGET_ROOTFS_ISO9660_BOOT_MENU=\"ParisaOS Installer\"" >> .config
-          echo "BR2_TARGET_ROOTFS_ISO9660_INITRD=y" >> .config
 
           echo "BR2_PACKAGE_XORG7=y" >> .config
           echo "BR2_PACKAGE_XSERVER_XORG_SERVER=y" >> .config
@@ -96,15 +93,13 @@ jobs:
           echo "BR2_PACKAGE_E2FSPROGS=y" >> .config
           echo "BR2_PACKAGE_UTIL_LINUX_BIN_FDISK=y" >> .config
 
-          # ساخت یه اسکریپت post-image قلابی که فقط exit 0 کنه
-          echo '#!/bin/sh' > board/qemu/dummy-post-image.sh
-          echo 'exit 0' >> board/qemu/dummy-post-image.sh
-          chmod +x board/qemu/dummy-post-image.sh
-          echo "BR2_ROOTFS_POST_IMAGE_SCRIPT=\"board/qemu/dummy-post-image.sh\"" >> .config
+          # *** DO NOT enable ISO9660 *** – we create the ISO ourselves
+          # This ensures Buildroot won't call any post-image script
 
           make olddefconfig
 
       - name: Build the system
+        timeout-minutes: 300   # 5 hours should be enough; avoid infinite hangs
         shell: bash
         run: |
           set -o pipefail
@@ -112,7 +107,7 @@ jobs:
           make -j$(nproc) 2>&1 | tee build.log
 
       - name: Create bootable ISO
-        if: always()
+        if: always() && steps.build.outcome != 'cancelled'
         run: |
           cd buildroot/output/images
           if [ ! -f rootfs.ext2 ] || [ ! -f bzImage ]; then
@@ -157,6 +152,7 @@ jobs:
           git push origin main
 
       - name: Upload ParisaOS
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ParisaOS-Xen-6.1
