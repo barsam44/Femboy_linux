@@ -50,7 +50,7 @@ test -d /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/
 mkdir -p /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc
 ( \
 	echo "NAME=Buildroot"; \
-	echo "VERSION=-gc1cf39a"; \
+	echo "VERSION=-g2b6f125"; \
 	echo "ID=buildroot"; \
 	echo "VERSION_ID=2024.02.9"; \
 	echo "PRETTY_NAME=\"Buildroot 2024.02.9\"" \
@@ -91,7 +91,7 @@ table='/home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/build/buildr
 mke2fs 1.47.0 (5-Feb-2023)
 Creating regular file /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/images/rootfs.ext2
 Creating filesystem with 61440 1k blocks and 15360 inodes
-Filesystem UUID: db50eb5e-19ed-4595-b3bf-5a2b4787ba1a
+Filesystem UUID: 176ddb6f-6c5a-4712-8897-819e92037ade
 Superblock backups stored on blocks: 
 	8193, 24577, 40961, 57345
 
@@ -101,3 +101,5 @@ Copying files into the device: done
 Writing superblocks and filesystem accounting information: 0/8   done
 
 >>>   Executing post-image script board/qemu/post-image.sh
+/bin/bash: line 1: board/qemu/post-image.sh: No such file or directory
+make: *** [Makefile:820: target-post-image] Error 127
