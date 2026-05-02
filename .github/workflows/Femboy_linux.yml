@@ -31,7 +31,12 @@ jobs:
         with:
           path: buildroot
           key: buildroot-${{ env.BUILDROOT_VERSION }}-xen
-
+      - name: Cache Buildroot source
+        id: cache                    # ← ADD THIS LINE
+        uses: actions/cache@v4
+        with:
+          path: buildroot
+          key: buildroot-${{ env.BUILDROOT_VERSION }}-xen
       - name: Download Buildroot
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
@@ -160,3 +165,6 @@ jobs:
         with:
           name: ParisaOS-Installer-Xen-6.1
           path: output-artifacts/
+      # Disable the default post-image script – we’ll create the ISO ourselves
+      - name: Disable Buildroot post-image script
+        run: rm -f buildroot/board/qemu/post-image.sh
