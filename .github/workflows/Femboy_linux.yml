@@ -1,4 +1,4 @@
-name: Build ParisaOS Installer with Xen Kernel 6.1
+name: Build ParisaOS with Xen 6.1 (Fixed)
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
   build-installer:
     runs-on: ubuntu-latest
     permissions:
-      contents: write          # needed to push log.txt
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -25,7 +25,6 @@ jobs:
             build-essential libncurses-dev bison flex libssl-dev bc \
             unzip rsync cpio xorriso isolinux fdisk mtools
 
-      # Only ONE cache step with id
       - name: Cache Buildroot source
         id: cache
         uses: actions/cache@v4
@@ -40,13 +39,13 @@ jobs:
           tar xzf buildroot-${{ env.BUILDROOT_VERSION }}.tar.gz
           mv buildroot-${{ env.BUILDROOT_VERSION }} buildroot
 
-      - name: Configure ParisaOS with Xen and Kernel 6.1
+      - name: Configure ParisaOS
         run: |
           cd buildroot
           make qemu_x86_64_defconfig
 
           echo "BR2_TARGET_GENERIC_HOSTNAME=\"parisa-os\"" >> .config
-          echo "BR2_TARGET_GENERIC_ISSUE=\"Welcome to ParisaOS Installer Edition\"" >> .config
+          echo "BR2_TARGET_GENERIC_ISSUE=\"Welcome to ParisaOS\"" >> .config
 
           echo "BR2_PACKAGE_XEN=y" >> .config
           echo "BR2_PACKAGE_XEN_TOOLS=y" >> .config
@@ -79,7 +78,6 @@ jobs:
           CONFIG_DRM_NOUVEAU=m
           KERNEL_FRAG
 
-          # --- X.org video drivers ---
           echo "BR2_PACKAGE_XDRIVER_XF86_VIDEO_INTEL=y" >> .config
           echo "BR2_PACKAGE_XDRIVER_XF86_VIDEO_NOUVEAU=y" >> .config
           echo "BR2_TARGET_ROOTFS_ISO9660=y" >> .config
@@ -98,14 +96,13 @@ jobs:
           echo "BR2_PACKAGE_E2FSPROGS=y" >> .config
           echo "BR2_PACKAGE_UTIL_LINUX_BIN_FDISK=y" >> .config
 
-          # Disable the broken post-image script completely
-          echo "BR2_ROOTFS_POST_IMAGE_SCRIPT=\"\"" >> .config
+          # ساخت یه اسکریپت post-image قلابی که فقط exit 0 کنه
+          echo '#!/bin/sh' > board/qemu/dummy-post-image.sh
+          echo 'exit 0' >> board/qemu/dummy-post-image.sh
+          chmod +x board/qemu/dummy-post-image.sh
+          echo "BR2_ROOTFS_POST_IMAGE_SCRIPT=\"board/qemu/dummy-post-image.sh\"" >> .config
 
-          # Finalise the configuration (only once)
           make olddefconfig
-
-          # (Optional) remove the script file for extra safety
-          rm -f board/qemu/post-image.sh
 
       - name: Build the system
         shell: bash
@@ -115,14 +112,13 @@ jobs:
           make -j$(nproc) 2>&1 | tee build.log
 
       - name: Create bootable ISO
-        if: always()   # run even if build step failed (we'll still try to build ISO)
+        if: always()
         run: |
           cd buildroot/output/images
           if [ ! -f rootfs.ext2 ] || [ ! -f bzImage ]; then
-            echo "Missing rootfs or kernel image. Skipping ISO creation."
+            echo "Missing rootfs or kernel. Skipping ISO."
             exit 0
           fi
-
           mkdir -p iso/boot/isolinux
           cat > iso/boot/isolinux/isolinux.cfg << 'CFG'
           default linux
@@ -132,9 +128,8 @@ jobs:
           CFG
           cp bzImage iso/boot/
           cp rootfs.ext2 iso/
-
           xorriso -as mkisofs \
-            -o ParisaOS-Installer-Xen-6.1.iso \
+            -o ParisaOS-Xen-6.1.iso \
             -b boot/isolinux/isolinux.bin \
             -c boot/isolinux/boot.cat \
             -no-emul-boot \
@@ -142,9 +137,8 @@ jobs:
             -boot-info-table \
             -R -J -V "ParisaOS Installer" \
             iso/
-
           mkdir -p ../../output-artifacts
-          cp ParisaOS-Installer-Xen-6.1.iso ../../output-artifacts/
+          cp ParisaOS-Xen-6.1.iso ../../output-artifacts/
           cp bzImage ../../output-artifacts/
           cp rootfs.ext2 ../../output-artifacts/
           if [ -f ../xen/xen ]; then
@@ -159,11 +153,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add log.txt
-          git commit -m "🤖 Update build log" || echo "No changes to commit"
+          git commit -m "🤖 Build log" || echo "Nothing to commit"
           git push origin main
 
-      - name: Upload ParisaOS Installer
+      - name: Upload ParisaOS
         uses: actions/upload-artifact@v4
         with:
-          name: ParisaOS-Installer-Xen-6.1
+          name: ParisaOS-Xen-6.1
           path: output-artifacts/
