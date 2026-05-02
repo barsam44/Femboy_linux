@@ -50,7 +50,7 @@ test -d /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/
 mkdir -p /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc
 ( \
 	echo "NAME=Buildroot"; \
-	echo "VERSION=-ged7509c"; \
+	echo "VERSION=-gc1cf39a"; \
 	echo "ID=buildroot"; \
 	echo "VERSION_ID=2024.02.9"; \
 	echo "PRETTY_NAME=\"Buildroot 2024.02.9\"" \
@@ -91,7 +91,7 @@ table='/home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/build/buildr
 mke2fs 1.47.0 (5-Feb-2023)
 Creating regular file /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/images/rootfs.ext2
 Creating filesystem with 61440 1k blocks and 15360 inodes
-Filesystem UUID: 31120e9c-9780-488c-877f-11f1da2709e5
+Filesystem UUID: db50eb5e-19ed-4595-b3bf-5a2b4787ba1a
 Superblock backups stored on blocks: 
 	8193, 24577, 40961, 57345
 
