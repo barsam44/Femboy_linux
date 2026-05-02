@@ -89,6 +89,11 @@ jobs:
           echo "BR2_PACKAGE_UTIL_LINUX=y" >> .config
           echo "BR2_PACKAGE_E2FSPROGS=y" >> .config
           echo "BR2_PACKAGE_UTIL_LINUX_BIN_FDISK=y" >> .config
+          # ... all your other echo lines ...
+
+          echo "BR2_ROOTFS_POST_IMAGE_SCRIPT=\"\"" >> .config   # ← disable default post-image
+
+          make olddefconfig
 
           make olddefconfig
 
