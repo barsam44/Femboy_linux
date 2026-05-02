@@ -72,8 +72,16 @@ jobs:
           CONFIG_HYPERVISOR_GUEST=y
           CONFIG_PARAVIRT=y
           CONFIG_PARAVIRT_XXL=y
+          CONFIG_DRM=y
+          CONFIG_DRM_FBDEV_EMULATION=y
+          CONFIG_FB=y
+          CONFIG_DRM_I915=m
+          CONFIG_DRM_NOUVEAU=m
           KERNEL_FRAG
 
+          # --- X.org video drivers ---
+          echo "BR2_PACKAGE_XDRIVER_XF86_VIDEO_INTEL=y" >> .config
+          echo "BR2_PACKAGE_XDRIVER_XF86_VIDEO_NOUVEAU=y" >> .config
           echo "BR2_TARGET_ROOTFS_ISO9660=y" >> .config
           echo "BR2_TARGET_ROOTFS_ISO9660_BOOT_MENU=\"ParisaOS Installer\"" >> .config
           echo "BR2_TARGET_ROOTFS_ISO9660_INITRD=y" >> .config
