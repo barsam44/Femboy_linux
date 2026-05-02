@@ -15,7 +15,7 @@ mkdir -p /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc
 echo "parisa-os" > /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/hostname
 /usr/bin/sed -i -e '$a \127.0.1.1\tparisa-os' -e '/^127.0.1.1/d' /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/hosts
 mkdir -p /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc
-echo "Welcome to ParisaOS Installer Edition" > /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/issue
+echo "Welcome to ParisaOS" > /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/issue
 /usr/bin/sed -i -e s,^root:[^:]*:,root::, /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/shadow
 grep -qsE '^/bin/sh$' /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/shells || echo "/bin/sh" >> /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/shells
 if [ -x /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/sbin/swapon -a -x /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/sbin/swapoff ]; then /usr/bin/sed -i -e '/^#.*\/sbin\/swap/s/^#\+[[:blank:]]*//' /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/inittab; else /usr/bin/sed -i -e '/^[^#].*\/sbin\/swap/s/^/#/' /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/inittab; fi
@@ -50,7 +50,7 @@ test -d /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc/
 mkdir -p /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/target/etc
 ( \
 	echo "NAME=Buildroot"; \
-	echo "VERSION=-gc6285f3"; \
+	echo "VERSION=-ga9e39ac"; \
 	echo "ID=buildroot"; \
 	echo "VERSION_ID=2024.02.9"; \
 	echo "PRETTY_NAME=\"Buildroot 2024.02.9\"" \
@@ -91,7 +91,7 @@ table='/home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/build/buildr
 mke2fs 1.47.0 (5-Feb-2023)
 Creating regular file /home/runner/work/Femboy_linux/Femboy_linux/buildroot/output/images/rootfs.ext2
 Creating filesystem with 61440 1k blocks and 15360 inodes
-Filesystem UUID: 82949769-1ad8-4ae9-b637-fc4522186695
+Filesystem UUID: db2632fd-b389-465c-a6c3-f0134e5c1f5c
 Superblock backups stored on blocks: 
 	8193, 24577, 40961, 57345
 
@@ -100,3 +100,4 @@ Writing inode tables: 0/8   done
 Copying files into the device: done
 Writing superblocks and filesystem accounting information: 0/8   done
 
+>>>   Executing post-image script board/qemu/dummy-post-image.sh
