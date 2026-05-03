@@ -1,13 +1,13 @@
-name: Download Model & Commit
+name: Download Model, Split into 10 MB Chunks & Commit
 
 on:
   workflow_dispatch:   # manual trigger
 
 jobs:
-  download-and-commit:
+  split-and-commit:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # needed to push commits
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -15,23 +15,42 @@ jobs:
 
       - name: Download the GGUF model
         run: |
-          curl -L -o GPT2.5.2-NSFW-Codex-0.4B.Q2_K.gguf \
+          curl -L -o model.gguf \
             "https://huggingface.co/mradermacher/GPT2.5.2-NSFW-Codex-0.4B-GGUF/resolve/main/GPT2.5.2-NSFW-Codex-0.4B.Q2_K.gguf?download=true"
 
-      - name: Set up Git LFS if file is over 100 MB
+      - name: Split into 10 MB chunks
         run: |
-          size=$(stat -c%s GPT2.5.2-NSFW-Codex-0.4B.Q2_K.gguf)
-          if [ "$size" -gt 104857600 ]; then
-            echo "File is larger than 100 MB; enabling Git LFS."
-            git lfs install
-            git lfs track "*.gguf"
-            git add .gitattributes
-          fi
+          mkdir -p model_chunks
+          cd model_chunks
+          split -b 10M ../model.gguf model.gguf.part_
+          # split creates files like model.gguf.part_aa, ab, ...
+          cd ..
+          # Remove the original large file; we only keep chunks
+          rm model.gguf
+
+      - name: Create merge scripts
+        run: |
+          # Linux/macOS script
+          cat > model_chunks/merge.sh << 'EOF'
+          #!/bin/bash
+          echo "Merging model.gguf..."
+          cat model.gguf.part_* > ../model.gguf
+          echo "Done! model.gguf is in the parent folder."
+          EOF
+          chmod +x model_chunks/merge.sh
+
+          # Windows batch file
+          cat > model_chunks/merge.bat << 'EOF'
+          @echo off
+          echo Merging model.gguf...
+          copy /b model.gguf.part_* ..\model.gguf
+          echo Done! model.gguf is in the parent folder.
+          EOF
 
       - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add GPT2.5.2-NSFW-Codex-0.4B.Q2_K.gguf
-          git commit -m "Add GPT2.5.2-NSFW-Codex-0.4B GGUF model" || echo "No changes to commit"
+          git add model_chunks/
+          git commit -m "Add model in 10 MB parts + merge scripts" || echo "No changes to commit"
           git push
