@@ -1,0 +1,37 @@
+name: Download Model & Commit
+
+on:
+  workflow_dispatch:   # manual trigger
+
+jobs:
+  download-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # needed to push commits
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download the GGUF model
+        run: |
+          curl -L -o GPT2.5.2-NSFW-Codex-0.4B.Q2_K.gguf \
+            "https://huggingface.co/mradermacher/GPT2.5.2-NSFW-Codex-0.4B-GGUF/resolve/main/GPT2.5.2-NSFW-Codex-0.4B.Q2_K.gguf?download=true"
+
+      - name: Set up Git LFS if file is over 100 MB
+        run: |
+          size=$(stat -c%s GPT2.5.2-NSFW-Codex-0.4B.Q2_K.gguf)
+          if [ "$size" -gt 104857600 ]; then
+            echo "File is larger than 100 MB; enabling Git LFS."
+            git lfs install
+            git lfs track "*.gguf"
+            git add .gitattributes
+          fi
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add GPT2.5.2-NSFW-Codex-0.4B.Q2_K.gguf
+          git commit -m "Add GPT2.5.2-NSFW-Codex-0.4B GGUF model" || echo "No changes to commit"
+          git push
