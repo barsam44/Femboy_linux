@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Aoba-Client-Mod-Fabric-26.1.2.jar - Download</title>
-<meta name="description" content="Download Aoba-Client-Mod-Fabric-26.1.2.jar - Fast, free file download.">
+<title>Plutora-Client-Mod-Fabric-1.21.11.jar - Download</title>
+<meta name="description" content="Download Plutora-Client-Mod-Fabric-1.21.11.jar - Fast, free file download.">
 <meta name="robots" content="index, follow">
-<link rel="canonical" href="https://download.cdn9mc.com/dl2.php?file=Aoba-Client-Mod-Fabric-26.1.2.jar">
+<link rel="canonical" href="https://download.cdn9mc.com/dl2.php?file=Plutora-Client-Mod-Fabric-1.21.11.jar">
 <link rel="icon" type="image/x-icon" href="/favicon.ico">
 <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
@@ -14,21 +14,21 @@
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#2d7d32">
 <meta property="og:type" content="website">
-<meta property="og:title" content="Aoba-Client-Mod-Fabric-26.1.2.jar - Download">
-<meta property="og:description" content="Download Aoba-Client-Mod-Fabric-26.1.2.jar fast and free.">
-<meta property="og:url" content="https://download.cdn9mc.com/dl2.php?file=Aoba-Client-Mod-Fabric-26.1.2.jar">
+<meta property="og:title" content="Plutora-Client-Mod-Fabric-1.21.11.jar - Download">
+<meta property="og:description" content="Download Plutora-Client-Mod-Fabric-1.21.11.jar fast and free.">
+<meta property="og:url" content="https://download.cdn9mc.com/dl2.php?file=Plutora-Client-Mod-Fabric-1.21.11.jar">
 <meta property="og:image" content="/9minecraft.png">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="Aoba-Client-Mod-Fabric-26.1.2.jar - Download">
-<meta name="twitter:description" content="Download Aoba-Client-Mod-Fabric-26.1.2.jar fast and free.">
+<meta name="twitter:title" content="Plutora-Client-Mod-Fabric-1.21.11.jar - Download">
+<meta name="twitter:description" content="Download Plutora-Client-Mod-Fabric-1.21.11.jar fast and free.">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  "name": "Aoba-Client-Mod-Fabric-26.1.2.jar",
-  "url": "https://download.cdn9mc.com/dl2.php?file=Aoba-Client-Mod-Fabric-26.1.2.jar",
-  "downloadUrl": "https://download.cdn9mc.com/dl2.php?file=Aoba-Client-Mod-Fabric-26.1.2.jar&amp;dl=1",
-  "fileSize": "15.49 MB"
+  "name": "Plutora-Client-Mod-Fabric-1.21.11.jar",
+  "url": "https://download.cdn9mc.com/dl2.php?file=Plutora-Client-Mod-Fabric-1.21.11.jar",
+  "downloadUrl": "https://download.cdn9mc.com/dl2.php?file=Plutora-Client-Mod-Fabric-1.21.11.jar&amp;dl=1",
+  "fileSize": "76.12 MB"
 }
 </script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -80,7 +80,7 @@ a:link{text-decoration:none}
       <script>
       (function(){
         var clickCount   = 0;
-        var dlUrl        = "dl2.php?file=Aoba-Client-Mod-Fabric-26.1.2.jar&dl=1";
+        var dlUrl        = "dl2.php?file=Plutora-Client-Mod-Fabric-1.21.11.jar&dl=1";
         var downloadArea = document.getElementById('clickBox');
 
         var aclibReady = false;
@@ -134,22 +134,22 @@ a:link{text-decoration:none}
 
       <span class="file_name">
         <span class="file_text">File name: </span>
-        <span class="file_link"><strong>Aoba-Client-Mod-Fabric-26.1.2.jar</strong></span>
+        <span class="file_link"><strong>Plutora-Client-Mod-Fabric-1.21.11.jar</strong></span>
         <span class="file_space"> - </span>
         <span class="file_size">File Size: </span>
-        <span class="file_link"><strong>15.49 MB</strong></span>
+        <span class="file_link"><strong>76.12 MB</strong></span>
       </span>
       <br>
 
       <div class="supportbox-container">
 
-<a href="https://3dskinview.net/" target="_blank" rel="noopener noreferrer"
-   style="display:inline-block; padding:12px 28px; margin:6px 0 4px; background:linear-gradient(135deg,#1E7E34 0%,#28a745 100%); color:#fff !important; font-weight:700; font-size:16px; text-decoration:none !important; border-radius:8px; box-shadow:0 4px 14px rgba(40,167,69,0.4); letter-spacing:0.5px; text-transform:uppercase;">
-  🚀 Try 3DSkinView.net — FREE Now
+<a href="https://ezseed.net/" target="_blank" rel="noopener noreferrer"
+   style="display:inline-block; padding:12px 28px; margin:6px 0 4px; background:linear-gradient(135deg,#B45309 0%,#F59E0B 100%); color:#fff !important; font-weight:700; font-size:16px; text-decoration:none !important; border-radius:8px; box-shadow:0 4px 14px rgba(245,158,11,0.45); letter-spacing:0.5px; text-transform:uppercase;">
+  🌍 Try EzSeed.net — FREE Now
 </a>
 
 <p class="supportbox-note" style="margin-top:10px; font-size:13px; line-height:1.5;">
-  ✨ A brand-new project from <strong style="color:#1E7E34; font-weight:700;">9Minecraft</strong> — <strong>3DSkinView.net</strong>: real-time 3D skin rendering, smooth animations, custom poses, HD export. <strong>100% free, forever.</strong>
+  🗺️ Another brand-new project from <strong style="color:#B45309; font-weight:700;">9Minecraft</strong> — <strong>EzSeed.net</strong>: Rare Seed Finder, Spawner Cluster Finder, Find Nearest, <strong>Java + Bedrock</strong>. <strong>100% free, forever.</strong>
 </p>
 
 </div>
