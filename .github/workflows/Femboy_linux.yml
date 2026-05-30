@@ -43,7 +43,6 @@ jobs:
               # درایورهای گرافیکی و رابط کاربری سینامون
               apks="$apks xorg-server xf86-video-intel xf86-video-amdgpu mesa-dri-gallium"
               apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager"
-              
               # مرورگر وب
               apks="$apks firefox"
               
@@ -57,8 +56,11 @@ jobs:
           cd /aports/scripts
           mkdir -p /github/workspace/output
           
-          # استفاده از سینتکس صحیح با دو خط تیره
-          sh mkimage.sh --profile parisaos --outdir /github/workspace/output
+          # معرفی آدرس مخازن رسمی آلپاین اج برای دانلود پکیج‌ها
+          sh mkimage.sh --profile parisaos \
+            --outdir /github/workspace/output \
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/community
 
       - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
