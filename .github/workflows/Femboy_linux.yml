@@ -24,21 +24,17 @@ jobs:
 
       - name: Create non-root build user
         run: |
-          # ساخت یک کاربر معمولی و اضافه کردن آن به گروه ابزارهای بیلد
+          # ساخت کاربر و گروه abuild
           adduser -D -G abuild build
-          # دادن دسترسی سودو بدون پسورد برای مواقع اضطراری اسکریپت
           echo "build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          # انتقال مالکیت پوشه ورک‌پلو به کاربر جدید
-          chown -R build:abuild /github/workspace
+          # استفاده از متغیر داینامیک گیت‌هاب برای تغییر مالکیت
+          chown -R build:abuild "$GITHUB_WORKSPACE"
 
       - name: Setup abuild keys as build user
         run: |
-          # تولید کلیدهای امضای دیجیتال با هویت کاربر معمولی
           su build -c "abuild-keygen -a -n"
-          # کپی کردن کلید عمومی در سیستم برای اعتماد apk به پکیج‌ها
           cp /home/build/.abuild/*.pub /etc/apk/keys/
 
-          # کلون کردن ریپازیتوری مادر آلپاین و تغییر مالکیت آن
       - name: Clone aports repository
         run: |
           git clone --depth 1 https://gitlab.alpinelinux.org/alpine/aports.git /aports
@@ -54,17 +50,10 @@ jobs:
               arch="x86_64"
               kernel_flavors="lts"
               
-              # فایل‌سیستم‌های ضروری (از جمله XFS)
               apks="$apks xfsprogs btrfs-progs e2fsprogs dosfstools ntfs-3g exfatprogs"
-              
-              # درایورهای گرافیکی و رابط کاربری سینامون
               apks="$apks xorg-server xf86-video-intel xf86-video-amdgpu mesa-dri-gallium"
               apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager"
-              
-              # مرورگر وب
               apks="$apks firefox"
-              
-              # نصاب گرافیکی (GUI Installer)
               apks="$apks calamares calamares-alpine"
           }
           EOF
@@ -72,18 +61,19 @@ jobs:
 
       - name: Build the ISO Image
         run: |
-          # اجرای اسکریپت اصلی کامپایل در قالب کاربر غیر روت
-          su build -c "
-            cd /aports/scripts
-            mkdir -p /github/workspace/output
-            sh mkimage.sh --profile parisaos \
-              --outdir /github/workspace/output \
-              --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
-              --repository https://dl-cdn.alpinelinux.org/alpine/edge/community
-          "
+          # ساخت پوشه خروجی با دسترسی درست قبل از اجرای اسکریپت
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          chown -R build:abuild "$GITHUB_WORKSPACE/output"
+          
+          cd /aports/scripts
+          # پاس دادن مسیر داینامیک به اسکریپت بیلد
+          su build -c "sh mkimage.sh --profile parisaos \
+            --outdir $GITHUB_WORKSPACE/output \
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/community"
 
       - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ParisaOS-x86_64-Live-GUI
-          path: /github/workspace/output/*.iso
+          path: output/*.iso
