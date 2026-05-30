@@ -20,12 +20,29 @@ jobs:
       - name: Install build dependencies
         run: |
           apk update
-          apk add alpine-sdk build-base apk-tools alpine-conf squashfs-tools xorriso mtools grub-efi dosfstools sudo
+          apk add alpine-sdk build-base apk-tools alpine-conf squashfs-tools xorriso mtools grub-efi dosfstools sudo git
 
-      - name: Setup abuild and aports repository
+      - name: Create non-root build user
+        run: |
+          # ساخت یک کاربر معمولی و اضافه کردن آن به گروه ابزارهای بیلد
+          adduser -D -G abuild build
+          # دادن دسترسی سودو بدون پسورد برای مواقع اضطراری اسکریپت
+          echo "build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          # انتقال مالکیت پوشه ورک‌پلو به کاربر جدید
+          chown -R build:abuild /github/workspace
+
+      - name: Setup abuild keys as build user
+        run: |
+          # تولید کلیدهای امضای دیجیتال با هویت کاربر معمولی
+          su build -c "abuild-keygen -a -n"
+          # کپی کردن کلید عمومی در سیستم برای اعتماد apk به پکیج‌ها
+          cp /home/build/.abuild/*.pub /etc/apk/keys/
+
+          # کلون کردن ریپازیتوری مادر آلپاین و تغییر مالکیت آن
+      - name: Clone aports repository
         run: |
           git clone --depth 1 https://gitlab.alpinelinux.org/alpine/aports.git /aports
-          abuild-keygen -a -i -n
+          chown -R build:abuild /aports
 
       - name: Create ParisaOS Profile
         run: |
@@ -43,6 +60,7 @@ jobs:
               # درایورهای گرافیکی و رابط کاربری سینامون
               apks="$apks xorg-server xf86-video-intel xf86-video-amdgpu mesa-dri-gallium"
               apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager"
+              
               # مرورگر وب
               apks="$apks firefox"
               
@@ -50,17 +68,19 @@ jobs:
               apks="$apks calamares calamares-alpine"
           }
           EOF
+          chown build:abuild /aports/scripts/mkimg.parisaos.sh
 
       - name: Build the ISO Image
         run: |
-          cd /aports/scripts
-          mkdir -p /github/workspace/output
-          
-          # معرفی آدرس مخازن رسمی آلپاین اج برای دانلود پکیج‌ها
-          sh mkimage.sh --profile parisaos \
-            --outdir /github/workspace/output \
-            --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
-            --repository https://dl-cdn.alpinelinux.org/alpine/edge/community
+          # اجرای اسکریپت اصلی کامپایل در قالب کاربر غیر روت
+          su build -c "
+            cd /aports/scripts
+            mkdir -p /github/workspace/output
+            sh mkimage.sh --profile parisaos \
+              --outdir /github/workspace/output \
+              --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
+              --repository https://dl-cdn.alpinelinux.org/alpine/edge/community
+          "
 
       - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
