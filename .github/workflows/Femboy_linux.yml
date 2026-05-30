@@ -1,4 +1,4 @@
-name: Build ParisaOS (Cinnamon + Firefox + GUI Installer)
+name: Build ParisaOS (Cinnamon + Firefox)
 
 on:
   push:
@@ -24,10 +24,8 @@ jobs:
 
       - name: Create non-root build user
         run: |
-          # ساخت کاربر و گروه abuild
           adduser -D -G abuild build
           echo "build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          # استفاده از متغیر داینامیک گیت‌هاب برای تغییر مالکیت
           chown -R build:abuild "$GITHUB_WORKSPACE"
 
       - name: Setup abuild keys as build user
@@ -44,36 +42,45 @@ jobs:
         run: |
           cat << 'EOF' > /aports/scripts/mkimg.parisaos.sh
           profile_parisaos() {
-              profile_standard
+              profile_base
               title="ParisaOS"
-              desc="Alpine Linux with Cinnamon, Firefox, and Calamares Installer"
+              desc="Alpine Linux with Cinnamon and Firefox"
               arch="x86_64"
               kernel_flavors="lts"
               
+              # بسته‌های پایه برای یک لایو دیسک استاندارد (بدون تداخل شبکه vlan)
+              apks="$apks alpine-base acpid syslinux grub-efi efibootmgr"
+              
+              # ابزارهای سیستم‌فایل و امضا
               apks="$apks xfsprogs btrfs-progs e2fsprogs dosfstools ntfs-3g exfatprogs"
+              
+              # زیرساخت گرافیک و درایورهای تصویر
               apks="$apks xorg-server xf86-video-intel xf86-video-amdgpu mesa-dri-gallium"
-              apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager"
+              
+              # محیط دسکتاپ Cinnamon و ابزارهای مدیریت نشست و شبکه
+              apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager accountsservice"
+              
+              # مرورگر وب پیش‌فرض
               apks="$apks firefox"
-              apks="$apks calamares calamares-alpine"
           }
           EOF
           chown build:abuild /aports/scripts/mkimg.parisaos.sh
 
       - name: Build the ISO Image
         run: |
-          # ساخت پوشه خروجی با دسترسی درست قبل از اجرای اسکریپت
           mkdir -p "$GITHUB_WORKSPACE/output"
           chown -R build:abuild "$GITHUB_WORKSPACE/output"
           
           cd /aports/scripts
-          # پاس دادن مسیر داینامیک به اسکریپت بیلد
+          # اضافه کردن مخزن testing در انتهای خطوط برای مجاز کردن دانلود دارایی‌های دسکتاپ Cinnamon
           su build -c "sh mkimage.sh --profile parisaos \
             --outdir $GITHUB_WORKSPACE/output \
             --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
-            --repository https://dl-cdn.alpinelinux.org/alpine/edge/community"
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
+            --repository https://dl-cdn.alpinelinux.org/alpine/edge/testing"
 
       - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ParisaOS-x86_64-Live-GUI
+          name: ParisaOS-x86_64-Live-Cinnamon
           path: output/*.iso
