@@ -1,159 +1,63 @@
-name: Build ParisaOS (No ISO target – stable)
+name: Build Custom Alpine OS (Cinnamon & XFS)
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
 
-env:
-  BUILDROOT_VERSION: "2024.02.9"
-  KERNEL_VERSION: "6.1.120"
-  XEN_VERSION: "4.18.1"
-
 jobs:
-  build-installer:
+  build-iso:
+    name: Build Custom ISO
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    container:
+      image: alpine:edge
+      options: --privileged
 
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install host tools
+      - name: Install build dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential libncurses-dev bison flex libssl-dev bc \
-            unzip rsync cpio xorriso isolinux fdisk mtools
+          apk update
+          apk add alpine-sdk build-base apk-tools alpine-conf squashfs-tools xorriso mtools grub-efi dosfstools sudo
 
-      - name: Cache Buildroot source
-        id: cache
-        uses: actions/cache@v4
-        with:
-          path: buildroot
-          key: buildroot-${{ env.BUILDROOT_VERSION }}-v2
-
-      - name: Download Buildroot
-        if: steps.cache.outputs.cache-hit != 'true'
+      - name: Setup abuild and aports repository
         run: |
-          wget https://buildroot.org/downloads/buildroot-${{ env.BUILDROOT_VERSION }}.tar.gz
-          tar xzf buildroot-${{ env.BUILDROOT_VERSION }}.tar.gz
-          mv buildroot-${{ env.BUILDROOT_VERSION }} buildroot
+          git clone --depth 1 https://gitlab.alpinelinux.org/alpine/aports.git /aports
+          # ایجاد کلید برای بیلد پکیج‌ها و ایمیج
+          abuild-keygen -a -i -n
 
-      - name: Configure ParisaOS
+      - name: Create Custom OS Profile
         run: |
-          cd buildroot
-          make qemu_x86_64_defconfig
-
-          echo "BR2_TARGET_GENERIC_HOSTNAME=\"parisa-os\"" >> .config
-          echo "BR2_TARGET_GENERIC_ISSUE=\"Welcome to ParisaOS\"" >> .config
-
-          echo "BR2_PACKAGE_XEN=y" >> .config
-          echo "BR2_PACKAGE_XEN_TOOLS=y" >> .config
-          echo "BR2_PACKAGE_XEN_HYPERVISOR=y" >> .config
-          echo "BR2_PACKAGE_BASH=y" >> .config
-
-          echo "BR2_LINUX_KERNEL=y" >> .config
-          echo "BR2_LINUX_KERNEL_CUSTOM_VERSION=y" >> .config
-          echo "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE=\"${{ env.KERNEL_VERSION }}\"" >> .config
-          echo "BR2_LINUX_KERNEL_DEFCONFIG=\"x86_64\"" >> .config
-
-          cat >> .config << 'EOF'
-          BR2_LINUX_KERNEL_CONFIG_FRAGMENT="xen-kernel-fragment.config"
+          cat << 'EOF' > /aports/scripts/mkimg.customos.sh
+          profile_customos() {
+              profile_standard
+              title="CustomOS-Cinnamon"
+              desc="Alpine Linux with Cinnamon UI and XFS/BTRFS support"
+              arch="x86_64"
+              kernel_flavors="lts"
+              
+              # افزودن ابزارهای فایل‌سیستم
+              apks="$apks xfsprogs btrfs-progs e2fsprogs dosfstools ntfs-3g exfatprogs"
+              
+              # افزودن درایورهای گرافیکی و سرور نمایش
+              apks="$apks xorg-server xf86-video-intel xf86-video-amdgpu mesa-dri-gallium"
+              
+              # افزودن محیط دسکتاپ سینامون و نیازمندی‌های شبکه و ورود
+              apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager dbus-x11"
+          }
           EOF
 
-          cat > xen-kernel-fragment.config << 'KERNEL_FRAG'
-          CONFIG_XEN=y
-          CONFIG_XEN_DOM0=y
-          CONFIG_XEN_PVHVM=y
-          CONFIG_XEN_BLKDEV_FRONTEND=y
-          CONFIG_XEN_NETDEV_FRONTEND=y
-          CONFIG_XEN_PCIDEV_FRONTEND=y
-          CONFIG_HYPERVISOR_GUEST=y
-          CONFIG_PARAVIRT=y
-          CONFIG_PARAVIRT_XXL=y
-          CONFIG_DRM=y
-          CONFIG_DRM_FBDEV_EMULATION=y
-          CONFIG_FB=y
-          CONFIG_DRM_I915=m
-          CONFIG_DRM_NOUVEAU=m
-          KERNEL_FRAG
-
-          echo "BR2_PACKAGE_XDRIVER_XF86_VIDEO_INTEL=y" >> .config
-          echo "BR2_PACKAGE_XDRIVER_XF86_VIDEO_NOUVEAU=y" >> .config
-
-          echo "BR2_PACKAGE_XORG7=y" >> .config
-          echo "BR2_PACKAGE_XSERVER_XORG_SERVER=y" >> .config
-          echo "BR2_PACKAGE_JWM=y" >> .config
-          echo "BR2_PACKAGE_XTERM=y" >> .config
-          echo "BR2_PACKAGE_XINIT=y" >> .config
-
-          echo "BR2_PACKAGE_BUSYBOX=y" >> .config
-          echo "BR2_PACKAGE_BASH=y" >> .config
-          echo "BR2_PACKAGE_UTIL_LINUX=y" >> .config
-          echo "BR2_PACKAGE_E2FSPROGS=y" >> .config
-          echo "BR2_PACKAGE_UTIL_LINUX_BIN_FDISK=y" >> .config
-
-          # *** DO NOT enable ISO9660 *** – we create the ISO ourselves
-          # This ensures Buildroot won't call any post-image script
-
-          make olddefconfig
-
-      - name: Build the system
-        timeout-minutes: 300   # 5 hours should be enough; avoid infinite hangs
-        shell: bash
+      - name: Build the ISO Image
         run: |
-          set -o pipefail
-          cd buildroot
-          make -j$(nproc) 2>&1 | tee build.log
+          cd /aports/scripts
+          mkdir -p /github/workspace/output
+          # کامپایل ایمیج با پروفایل ساخته شده
+          sh mkimage.sh -p customos -outdir /github/workspace/output
 
-      - name: Create bootable ISO
-        if: always() && steps.build.outcome != 'cancelled'
-        run: |
-          cd buildroot/output/images
-          if [ ! -f rootfs.ext2 ] || [ ! -f bzImage ]; then
-            echo "Missing rootfs or kernel. Skipping ISO."
-            exit 0
-          fi
-          mkdir -p iso/boot/isolinux
-          cat > iso/boot/isolinux/isolinux.cfg << 'CFG'
-          default linux
-          label linux
-            kernel /boot/bzImage
-            append root=/dev/sr0 ro init=/sbin/init
-          CFG
-          cp bzImage iso/boot/
-          cp rootfs.ext2 iso/
-          xorriso -as mkisofs \
-            -o ParisaOS-Xen-6.1.iso \
-            -b boot/isolinux/isolinux.bin \
-            -c boot/isolinux/boot.cat \
-            -no-emul-boot \
-            -boot-load-size 4 \
-            -boot-info-table \
-            -R -J -V "ParisaOS Installer" \
-            iso/
-          mkdir -p ../../output-artifacts
-          cp ParisaOS-Xen-6.1.iso ../../output-artifacts/
-          cp bzImage ../../output-artifacts/
-          cp rootfs.ext2 ../../output-artifacts/
-          if [ -f ../xen/xen ]; then
-            cp ../xen/xen ../../output-artifacts/
-          fi
-          cp ../../build.log ../../output-artifacts/
-
-      - name: Commit build log to repo
-        if: always()
-        run: |
-          cp buildroot/build.log log.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add log.txt
-          git commit -m "🤖 Build log" || echo "Nothing to commit"
-          git push origin main
-
-      - name: Upload ParisaOS
-        if: always()
+      - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ParisaOS-Xen-6.1
-          path: output-artifacts/
+          name: customos-cinnamon-x86_64-iso
+          path: /github/workspace/output/*.iso
