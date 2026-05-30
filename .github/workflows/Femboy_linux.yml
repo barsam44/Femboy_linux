@@ -1,4 +1,4 @@
-name: Build Custom Alpine OS (Cinnamon & XFS)
+name: Build ParisaOS (Cinnamon + Firefox + GUI Installer)
 
 on:
   push:
@@ -25,27 +25,30 @@ jobs:
       - name: Setup abuild and aports repository
         run: |
           git clone --depth 1 https://gitlab.alpinelinux.org/alpine/aports.git /aports
-          # ایجاد کلید برای بیلد پکیج‌ها و ایمیج
           abuild-keygen -a -i -n
 
-      - name: Create Custom OS Profile
+      - name: Create ParisaOS Profile
         run: |
-          cat << 'EOF' > /aports/scripts/mkimg.customos.sh
-          profile_customos() {
+          cat << 'EOF' > /aports/scripts/mkimg.parisaos.sh
+          profile_parisaos() {
               profile_standard
-              title="CustomOS-Cinnamon"
-              desc="Alpine Linux with Cinnamon UI and XFS/BTRFS support"
+              title="ParisaOS"
+              desc="Alpine Linux with Cinnamon, Firefox, and Calamares Installer"
               arch="x86_64"
               kernel_flavors="lts"
               
-              # افزودن ابزارهای فایل‌سیستم
+              # فایل‌سیستم‌های ضروری (از جمله XFS)
               apks="$apks xfsprogs btrfs-progs e2fsprogs dosfstools ntfs-3g exfatprogs"
               
-              # افزودن درایورهای گرافیکی و سرور نمایش
+              # درایورهای گرافیکی و رابط کاربری سینامون
               apks="$apks xorg-server xf86-video-intel xf86-video-amdgpu mesa-dri-gallium"
+              apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager"
               
-              # افزودن محیط دسکتاپ سینامون و نیازمندی‌های شبکه و ورود
-              apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager dbus-x11"
+              # مرورگر وب
+              apks="$apks firefox"
+              
+              # نصاب گرافیکی (GUI Installer)
+              apks="$apks calamares calamares-alpine"
           }
           EOF
 
@@ -53,11 +56,12 @@ jobs:
         run: |
           cd /aports/scripts
           mkdir -p /github/workspace/output
-          # کامپایل ایمیج با پروفایل ساخته شده
-          sh mkimage.sh -p customos -outdir /github/workspace/output
+          
+          # استفاده از سینتکس صحیح با دو خط تیره
+          sh mkimage.sh --profile parisaos --outdir /github/workspace/output
 
       - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: customos-cinnamon-x86_64-iso
+          name: ParisaOS-x86_64-Live-GUI
           path: /github/workspace/output/*.iso
