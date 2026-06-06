@@ -1,4 +1,4 @@
-name: Build ParisaOS (Cinnamon + Firefox)
+name: Build Femboy Alpine (Cinnamon + Nouveau + Mesa + Chromium)
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-iso:
-    name: Build Custom ISO
+    name: Build Custom Alpine ISO
     runs-on: ubuntu-latest
     container:
       image: alpine:edge
@@ -38,42 +38,44 @@ jobs:
           git clone --depth 1 https://gitlab.alpinelinux.org/alpine/aports.git /aports
           chown -R build:abuild /aports
 
-      - name: Create ParisaOS Profile
+      - name: Create Femboy Alpine Profile
         run: |
-          cat << 'EOF' > /aports/scripts/mkimg.parisaos.sh
-          profile_parisaos() {
+          cat << 'EOF' > /aports/scripts/mkimg.femboy-alpine.sh
+          profile_femboy_alpine() {
               profile_base
-              title="ParisaOS"
-              desc="Alpine Linux with Cinnamon and Firefox"
+              title="Femboy Alpine"
+              desc="Alpine Linux with Cinnamon, Nouveau, Mesa, and Chromium"
               arch="x86_64"
               kernel_flavors="lts"
-              
-              # بسته‌های پایه برای یک لایو دیسک استاندارد (بدون تداخل شبکه vlan)
+
+              # Base packages for a live disk
               apks="$apks alpine-base acpid syslinux grub-efi efibootmgr"
-              
-              # ابزارهای سیستم‌فایل و امضا
+
+              # Filesystem and signature tools
               apks="$apks xfsprogs btrfs-progs e2fsprogs dosfstools ntfs-3g exfatprogs"
-              
-              # زیرساخت گرافیک و درایورهای تصویر
-              apks="$apks xorg-server xf86-video-intel xf86-video-amdgpu mesa-dri-gallium"
-              
-              # محیط دسکتاپ Cinnamon و ابزارهای مدیریت نشست و شبکه
-              apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager accountsservice"
-              
-              # مرورگر وب پیش‌فرض
-              apks="$apks firefox"
+
+              # Graphics infrastructure and drivers (Nouveau + Mesa)
+              apks="$apks xorg-server xf86-video-nouveau mesa-dri-gallium mesa-va-gallium mesa-gl"
+
+              # Cinnamon desktop environment and session management
+              apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager accountsservice polkit"
+
+              # Chromium-based browser
+              apks="$apks chromium"
+
+              # Additional utilities
+              apks="$apks bash curl wget"
           }
           EOF
-          chown build:abuild /aports/scripts/mkimg.parisaos.sh
+          chown build:abuild /aports/scripts/mkimg.femboy-alpine.sh
 
       - name: Build the ISO Image
         run: |
           mkdir -p "$GITHUB_WORKSPACE/output"
           chown -R build:abuild "$GITHUB_WORKSPACE/output"
-          
+
           cd /aports/scripts
-          # اضافه کردن مخزن testing در انتهای خطوط برای مجاز کردن دانلود دارایی‌های دسکتاپ Cinnamon
-          su build -c "sh mkimage.sh --profile parisaos \
+          su build -c "sh mkimage.sh --profile femboy_alpine \
             --outdir $GITHUB_WORKSPACE/output \
             --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
             --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
@@ -82,5 +84,5 @@ jobs:
       - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ParisaOS-x86_64-Live-Cinnamon
+          name: Femboy-Alpine-x86_64-Live-Cinnamon-Nouveau
           path: output/*.iso
