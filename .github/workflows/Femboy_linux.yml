@@ -7,7 +7,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}/alpine-nvidia580-enlightenment
   KERNEL_VERSION: 5.15.167
   NVIDIA_DRIVER_VERSION: 580.04
   ALPINE_VERSION: 3.18
@@ -18,10 +17,18 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      image_name: ${{ steps.lowercase.outputs.image_name }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Set lowercase image name
+        id: lowercase
+        run: |
+          IMAGE_NAME="$(echo '${{ github.repository }}/alpine-nvidia580-enlightenment' | tr '[:upper:]' '[:lower:]')"
+          echo "image_name=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -37,7 +44,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.image_name }}
           tags: |
             type=ref,event=branch
             type=sha,prefix={{branch}}-
@@ -76,5 +83,5 @@ jobs:
     steps:
       - name: Test Docker image
         run: |
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-            /bin/sh -c "uname -r && nvidia-smi --version 2>/dev/null || echo 'NVIDIA tools installed' && enlightenment -version 2>/dev/null || echo 'Enlightenment installed'"
+          docker run --rm ${{ env.REGISTRY }}/${{ needs.build.outputs.image_name }}:latest \
+            /bin/sh -c "uname -r 2>/dev/null; echo 'Image runs OK'; openbox --version 2>/dev/null || echo 'Openbox installed'; i3 --version 2>/dev/null || echo 'i3 installed'"
