@@ -9,6 +9,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/alpine-nvidia580-enlightenment
   KERNEL_VERSION: 5.15.167
+  NVIDIA_DRIVER_VERSION: 580.04
   ALPINE_VERSION: 3.18
 
 jobs:
@@ -63,7 +64,7 @@ jobs:
           echo "Desktop: Enlightenment 0.25+" >> checksums/BUILD_INFO.txt
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: build-info
           path: checksums/
