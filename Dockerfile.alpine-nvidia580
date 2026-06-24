@@ -32,20 +32,26 @@ RUN apk add --no-cache \
     mesa-gl \
     libva-dev
 
-# Group 3: X11
-RUN apk add --no-cache \
-    xorg-server \
-    xorg-server-dev \
-    xinit \
-    xauth \
-    x11-apps \
-    libx11-dev \
-    libxcb-dev \
-    libxext-dev \
-    libxrender-dev \
-    libxfixes-dev \
-    libxrandr-dev \
-    libxi-dev
+# Group 3a: Core X server
+RUN apk add --no-cache xorg-server
+
+# Group 3b: X server dev headers
+RUN apk add --no-cache xorg-server-dev
+
+# Group 3c: X utilities
+RUN apk add --no-cache xinit xauth
+
+# Group 3d: X11 client apps (optional, may not exist as single pkg)
+RUN apk add --no-cache xterm || echo "xterm not available, skipping"
+
+# Group 3e: X11 dev libraries
+RUN apk add --no-cache libx11-dev
+RUN apk add --no-cache libxcb-dev
+RUN apk add --no-cache libxext-dev
+RUN apk add --no-cache libxrender-dev
+RUN apk add --no-cache libxfixes-dev
+RUN apk add --no-cache libxrandr-dev
+RUN apk add --no-cache libxi-dev
 
 # Group 4: Window managers
 RUN apk add --no-cache \
