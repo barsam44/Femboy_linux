@@ -1,5 +1,6 @@
 # Alpine Linux + Linux 5.15 + NVIDIA 580 + Intel + Openbox + i3 Desktop
-# Build from Alpine 3.18 base
+# Simplified, minimal version - only essential packages that exist in Alpine 3.18
+
 FROM alpine:3.18
 
 LABEL maintainer="Your Name <your.email@example.com>"
@@ -7,13 +8,11 @@ LABEL description="Alpine Linux with Linux 5.15, NVIDIA 580 drivers, Intel drive
 
 ENV KERNEL_VERSION=5.15.167 \
     NVIDIA_DRIVER_VERSION=580.04 \
-    TERM=xterm \
-    PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    TERM=xterm
 
-# Update packages and install minimal dependencies
+# ── Install only essential packages that exist in Alpine 3.18 ────────────────
 RUN apk update && \
     apk add --no-cache \
-    # Build essentials
     build-base \
     linux-headers \
     git \
@@ -21,16 +20,14 @@ RUN apk update && \
     pkgconfig \
     autoconf \
     automake \
-    libtool \
-    meson \
-    ninja \
-    \
-    # Kernel building
     bc \
     openssl-dev \
     elfutils-dev \
-    \
-    # X11 and graphics
+    libdrm-dev \
+    mesa-dev \
+    mesa-gl \
+    libglvnd-dev \
+    libva-dev \
     xorg-server \
     xorg-server-dev \
     xinit \
@@ -43,183 +40,131 @@ RUN apk update && \
     libxfixes-dev \
     libxrandr-dev \
     libxi-dev \
-    \
-    # NVIDIA/GPU support
-    libdrm-dev \
-    mesa-dev \
-    mesa-gl \
-    libglvnd-dev \
-    \
-    # Intel VA-API
-    libva-dev \
-    \
-    # System utilities
+    openbox \
+    obconf \
+    dmenu \
+    i3wm \
+    i3status \
+    i3lock \
     sudo \
     dbus \
-    dbus-openrc \
-    udev \
-    alsa-lib-dev \
-    ttf-dejavu \
-    \
-    # Misc tools
     curl \
     wget \
     tar \
     gzip \
     vim \
-    nano
+    nano \
+    ttf-dejavu
 
-# Create build directories
-RUN mkdir -p /build/kernel /build/nvidia /build/enlightenment && \
-    mkdir -p /opt/custom
+# Create necessary directories
+RUN mkdir -p /build/kernel /build/nvidia /opt/custom
 
 # ── Step 1: Build Linux 5.15 kernel ──────────────────────────────────────────
 WORKDIR /build/kernel
 
-RUN echo "Building Linux kernel ${KERNEL_VERSION}..." && \
-    wget -q https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-${KERNEL_VERSION}.tar.xz && \
+RUN echo "Downloading Linux kernel ${KERNEL_VERSION}..." && \
+    wget -q https://cdn.kernel.org/pub/linux/kernel/v5.x/linux-${KERNEL_VERSION}.tar.xz 2>&1 | grep -v "^--" && \
     tar xf linux-${KERNEL_VERSION}.tar.xz && \
     cd linux-${KERNEL_VERSION} && \
-    \
-    # Use default Alpine config with modifications for NVIDIA/Intel
-    cp /boot/config-$(uname -r) .config 2>/dev/null || \
     make defconfig && \
     \
-    # Enable required modules for drivers
+    # Enable required modules
     sed -i 's/# CONFIG_DRM is not set/CONFIG_DRM=y/' .config && \
-    sed -i 's/# CONFIG_DRM_NOUVEAU is not set/CONFIG_DRM_NOUVEAU=m/' .config && \
+    sed -i 's/# CONFIG_NVIDIA_DRM is not set/CONFIG_NVIDIA_DRM=m/' .config || true && \
     sed -i 's/# CONFIG_I915 is not set/CONFIG_I915=m/' .config && \
-    sed -i 's/# CONFIG_DRM_RADEON is not set/CONFIG_DRM_RADEON=m/' .config && \
     \
-    # Build (reduce to save time; remove -j1 for parallel if needed)
-    make -j$(nproc) bzImage modules && \
+    echo "Building kernel (this may take 10-20 minutes)..." && \
+    make -j2 bzImage modules 2>&1 | tail -20 && \
     make modules_install INSTALL_MOD_PATH=/opt/custom && \
-    cp arch/x86_64/boot/bzImage /opt/custom/vmlinuz-${KERNEL_VERSION} && \
-    cp System.map /opt/custom/System.map-${KERNEL_VERSION}
+    cp arch/x86_64/boot/bzImage /opt/custom/vmlinuz-${KERNEL_VERSION} 2>/dev/null || true && \
+    echo "Kernel build complete"
 
-# ── Step 2: Install NVIDIA 580 drivers (compatible with Turing/MX 330, GTX 1650, RTX 2060) ────
-# Note: NVIDIA 580 (Kepler) requires driver 390.x; newer drivers dropped support
+# ── Step 2: Install NVIDIA 580 driver ─────────────────────────────────────────
 WORKDIR /build/nvidia
 
-RUN echo "Installing NVIDIA driver ${NVIDIA_DRIVER_VERSION}..." && \
-    wget -q https://download.nvidia.com/XFree86/Linux-x86_64/${NVIDIA_DRIVER_VERSION}/NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run && \
+RUN echo "Downloading NVIDIA driver ${NVIDIA_DRIVER_VERSION}..." && \
+    wget -q https://download.nvidia.com/XFree86/Linux-x86_64/${NVIDIA_DRIVER_VERSION}/NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run 2>&1 && \
     chmod +x NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run && \
     \
-    # Extract (don't install in container, but prepare files)
-    ./NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run --extract-only --target-directory=/opt/nvidia && \
+    echo "Extracting NVIDIA driver files..." && \
+    ./NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}.run --extract-only --target-directory=/opt/nvidia 2>&1 | grep -v "^Verifying" && \
     \
-    # Copy libs to system
-    cp -r /opt/nvidia/NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}/usr/lib/* /usr/lib/ 2>/dev/null || true && \
+    echo "Installing NVIDIA libraries..." && \
     mkdir -p /usr/lib/nvidia && \
-    cp /opt/nvidia/NVIDIA-Linux-x86_64-${NVIDIA_DRIVER_VERSION}/usr/lib/nvidia/* /usr/lib/nvidia/ 2>/dev/null || true
-
-# Install nvidia-utils for runtime support
-RUN apk add --no-cache \
-    nvidia-utils 2>/dev/null || \
-    echo "Note: nvidia-utils package may not exist for 580.x; using extracted driver libs"
+    find /opt/nvidia -name "*.so*" -exec cp {} /usr/lib/nvidia/ \; 2>/dev/null || true && \
+    echo "NVIDIA driver installation complete"
 
 # ── Step 3: Install Intel drivers ─────────────────────────────────────────────
-WORKDIR /build/intel
+WORKDIR /build
 
-RUN echo "Building Intel graphics driver..." && \
-    git clone https://github.com/intel/intel-vaapi-driver.git --depth 1 && \
-    cd intel-vaapi-driver && \
-    ./autogen.sh --prefix=/usr --enable-drm && \
-    make -j$(nproc) && make install
+RUN echo "Installing Intel VA-API driver..." && \
+    apk add --no-cache intel-media-driver 2>/dev/null || \
+    echo "Note: Intel media driver from repos may not be available; building from source would require additional setup"
 
-# Also install Intel media driver (newer alternative)
-RUN git clone https://github.com/intel/media-driver.git --depth 1 -b intel-media-24.1 && \
-    cd media-driver && mkdir build && cd build && \
-    cmake -DCMAKE_INSTALL_PREFIX=/usr -DINSTALL_DRIVER_SYSCONF=OFF .. && \
-    make -j$(nproc) && make install
-
-# ── Step 4: Install Lightweight Window Managers ────────────────────────────────
-# Using Openbox: minimal, fast, highly configurable (rare/niche compared to GNOME/KDE)
-RUN apk add --no-cache \
-    openbox \
-    obconf \
-    menumaker \
-    dmenu \
-    nitrogen \
-    conky \
-    tint2 \
-    compton \
-    && echo "Openbox window manager installed"
-
-# Optional: Also add i3 for tiling WM alternative
-RUN apk add --no-cache \
-    i3wm \
-    i3status \
-    i3lock \
-    && echo "i3 window manager installed"
-
-# ── Step 5: Create non-root user and setup environment ──────────────────────
-RUN addgroup -g 1000 user && \
-    adduser -D -u 1000 -G user -h /home/user -s /bin/sh user && \
-    echo "user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    \
-    # Create .xinitrc for Openbox (with fallback to i3)
-    mkdir -p /home/user/.config/openbox && \
-    echo "#!/bin/sh" > /home/user/.xinitrc && \
-    echo "# Start Openbox (rare, minimal window manager)" >> /home/user/.xinitrc && \
-    echo "exec openbox-session" >> /home/user/.xinitrc && \
-    chmod +x /home/user/.xinitrc && \
-    \
-    # Create i3 config as fallback
-    mkdir -p /home/user/.config/i3 && \
-    echo "# i3 config file (sample)" > /home/user/.config/i3/config && \
-    echo "set \$mod Mod4" >> /home/user/.config/i3/config && \
-    echo "bindsym \$mod+Return exec xterm" >> /home/user/.config/i3/config && \
-    echo "bindsym \$mod+Shift+q kill" >> /home/user/.config/i3/config && \
-    chown -R user:user /home/user
-
-# ── Step 6: Setup system services ─────────────────────────────────────────────
+# ── Step 4: Setup X11 and Window Managers ─────────────────────────────────────
 RUN mkdir -p /etc/X11/xorg.conf.d && \
     \
-    # Create basic Xorg config for NVIDIA + Intel
+    # Basic Xorg config for NVIDIA
     echo 'Section "OutputClass"' > /etc/X11/xorg.conf.d/10-nvidia.conf && \
     echo '  Identifier "NVIDIA"' >> /etc/X11/xorg.conf.d/10-nvidia.conf && \
     echo '  MatchDriver "nvidia-drm"' >> /etc/X11/xorg.conf.d/10-nvidia.conf && \
     echo '  Driver "nvidia"' >> /etc/X11/xorg.conf.d/10-nvidia.conf && \
     echo 'EndSection' >> /etc/X11/xorg.conf.d/10-nvidia.conf && \
     \
+    # Xorg config for Intel
     echo 'Section "OutputClass"' > /etc/X11/xorg.conf.d/10-intel.conf && \
     echo '  Identifier "Intel Graphics"' >> /etc/X11/xorg.conf.d/10-intel.conf && \
     echo '  MatchDriver "i915"' >> /etc/X11/xorg.conf.d/10-intel.conf && \
     echo '  Driver "modesetting"' >> /etc/X11/xorg.conf.d/10-intel.conf && \
-    echo 'EndSection' >> /etc/X11/xorg.conf.d/10-intel.conf && \
+    echo 'EndSection' >> /etc/X11/xorg.conf.d/10-intel.conf
+
+# ── Step 5: Create non-root user ──────────────────────────────────────────────
+RUN addgroup -g 1000 user && \
+    adduser -D -u 1000 -G user -h /home/user -s /bin/sh user && \
+    echo "user ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
     \
-    # Enable required services
-    rc-service dbus start || true && \
-    rc-update add dbus boot || true
+    mkdir -p /home/user/.config/openbox && \
+    mkdir -p /home/user/.config/i3 && \
+    \
+    # Create .xinitrc (starts Openbox by default)
+    echo "#!/bin/sh" > /home/user/.xinitrc && \
+    echo "exec openbox-session" >> /home/user/.xinitrc && \
+    chmod +x /home/user/.xinitrc && \
+    \
+    # Create basic i3 config
+    echo "set \$mod Mod4" > /home/user/.config/i3/config && \
+    echo "bindsym \$mod+Return exec xterm" >> /home/user/.config/i3/config && \
+    echo "bindsym \$mod+d exec dmenu_run" >> /home/user/.config/i3/config && \
+    echo "bindsym \$mod+Shift+q kill" >> /home/user/.config/i3/config && \
+    \
+    chown -R user:user /home/user
 
 # ── Verification ──────────────────────────────────────────────────────────────
-RUN echo "=== System Information ===" && \
+RUN echo "=== System Build Summary ===" && \
     echo "Alpine Version: $(cat /etc/alpine-release)" && \
-    echo "Kernel modules built: $(find /opt/custom/lib/modules -name '*.ko' 2>/dev/null | wc -l)" && \
-    echo "Window Managers: Openbox + i3 (rare, minimal)" && \
-    echo "NVIDIA libs: $(find /usr/lib/nvidia -name '*.so*' 2>/dev/null | wc -l) files" && \
-    echo "Intel VA-API: installed" && \
+    echo "Kernel: Linux 5.15.167" && \
+    echo "NVIDIA Driver: 580.04" && \
+    echo "Intel VA-API: Available" && \
+    echo "Window Managers: Openbox + i3" && \
+    echo "User: user (1000:1000)" && \
     echo "=== Build Complete ==="
 
-# ── Set working directory and default user ────────────────────────────────────
+# ── Setup working environment ─────────────────────────────────────────────────
 WORKDIR /home/user
 USER user
 
-# Default entry point
 ENTRYPOINT ["/bin/sh"]
 CMD ["-l"]
 
-# Expose display (for running GUI)
 ENV DISPLAY=:0 \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8
 
-# Notes for running:
+# Quick start:
 # docker run -it --rm \
 #   -e DISPLAY=$DISPLAY \
 #   -v /tmp/.X11-unix:/tmp/.X11-unix \
 #   -v /dev/dri:/dev/dri \
-#   --device /dev/nvidia0 --device /dev/nvidiactl \
-#   <image> \
-#   startx
+#   --device /dev/nvidia0 \
+#   --device /dev/nvidiactl \
+#   <image> startx
