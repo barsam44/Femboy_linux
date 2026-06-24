@@ -84,4 +84,4 @@ jobs:
       - name: Test Docker image
         run: |
           docker run --rm ${{ env.REGISTRY }}/${{ needs.build.outputs.image_name }}:latest \
-            /bin/sh -c "uname -r 2>/dev/null; echo 'Image runs OK'; openbox --version 2>/dev/null || echo 'Openbox installed'; i3 --version 2>/dev/null || echo 'i3 installed'"
+            -c "uname -r 2>/dev/null; echo 'Image runs OK'; openbox --version 2>/dev/null || echo 'Openbox installed'; i3 --version 2>/dev/null || echo 'i3 installed'"
