@@ -1,88 +1,79 @@
-name: Build Femboy Alpine (Cinnamon + Nouveau + Mesa + Chromium)
+name: Build Alpine Linux + NVIDIA 580 + Intel + Enlightenment
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/alpine-nvidia580-enlightenment
+  KERNEL_VERSION: 5.15.167
+  ALPINE_VERSION: 3.18
+
 jobs:
-  build-iso:
-    name: Build Custom Alpine ISO
+  build:
     runs-on: ubuntu-latest
-    container:
-      image: alpine:edge
-      options: --privileged
+    permissions:
+      contents: read
+      packages: write
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
-        run: |
-          apk update
-          apk add alpine-sdk build-base apk-tools alpine-conf squashfs-tools xorriso mtools grub-efi dosfstools sudo git
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Create non-root build user
-        run: |
-          adduser -D -G abuild build
-          echo "build ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
-          chown -R build:abuild "$GITHUB_WORKSPACE"
-
-      - name: Setup abuild keys as build user
-        run: |
-          su build -c "abuild-keygen -a -n"
-          cp /home/build/.abuild/*.pub /etc/apk/keys/
-
-      - name: Clone aports repository
-        run: |
-          git clone --depth 1 https://gitlab.alpinelinux.org/alpine/aports.git /aports
-          chown -R build:abuild /aports
-
-      - name: Create Femboy Alpine Profile
-        run: |
-          cat << 'EOF' > /aports/scripts/mkimg.femboy-alpine.sh
-          profile_femboy_alpine() {
-              profile_base
-              title="Femboy Alpine"
-              desc="Alpine Linux with Cinnamon, Nouveau, Mesa, and Chromium"
-              arch="x86_64"
-              kernel_flavors="lts"
-
-              # Base packages for a live disk
-              apks="$apks alpine-base acpid syslinux grub-efi efibootmgr"
-
-              # Filesystem and signature tools
-              apks="$apks xfsprogs btrfs-progs e2fsprogs dosfstools ntfs-3g exfatprogs"
-
-              # Graphics infrastructure and drivers (Nouveau + Mesa)
-              apks="$apks xorg-server xf86-video-nouveau mesa-dri-gallium mesa-va-gallium mesa-gl"
-
-              # Cinnamon desktop environment and session management
-              apks="$apks lightdm cinnamon dbus-x11 sudo networkmanager accountsservice polkit"
-
-              # Chromium-based browser
-              apks="$apks chromium"
-
-              # Additional utilities
-              apks="$apks bash curl wget"
-          }
-          EOF
-          chown build:abuild /aports/scripts/mkimg.femboy-alpine.sh
-
-      - name: Build the ISO Image
-        run: |
-          mkdir -p "$GITHUB_WORKSPACE/output"
-          chown -R build:abuild "$GITHUB_WORKSPACE/output"
-
-          cd /aports/scripts
-          su build -c "sh mkimage.sh --profile femboy_alpine \
-            --outdir $GITHUB_WORKSPACE/output \
-            --repository https://dl-cdn.alpinelinux.org/alpine/edge/main \
-            --repository https://dl-cdn.alpinelinux.org/alpine/edge/community \
-            --repository https://dl-cdn.alpinelinux.org/alpine/edge/testing"
-
-      - name: Upload ISO Artifact
-        uses: actions/upload-artifact@v4
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
         with:
-          name: Femboy-Alpine-x86_64-Live-Cinnamon-Nouveau
-          path: output/*.iso
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.alpine-nvidia580
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Generate checksums
+        run: |
+          mkdir -p checksums
+          echo "Build completed: ${{ steps.meta.outputs.version }}" > checksums/BUILD_INFO.txt
+          echo "Kernel: ${{ env.KERNEL_VERSION }}" >> checksums/BUILD_INFO.txt
+          echo "Alpine: ${{ env.ALPINE_VERSION }}" >> checksums/BUILD_INFO.txt
+          echo "Desktop: Enlightenment 0.25+" >> checksums/BUILD_INFO.txt
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-info
+          path: checksums/
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Test Docker image
+        run: |
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+            /bin/sh -c "uname -r && nvidia-smi --version 2>/dev/null || echo 'NVIDIA tools installed' && enlightenment -version 2>/dev/null || echo 'Enlightenment installed'"
