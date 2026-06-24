@@ -10,24 +10,30 @@ ENV KERNEL_VERSION=5.15.167 \
     NVIDIA_DRIVER_VERSION=580.04 \
     TERM=xterm
 
-# ── Install only essential packages that exist in Alpine 3.18 ────────────────
-RUN apk update && \
-    apk add --no-cache \
+# ── Install packages in separate groups (easier to debug failures) ───────────
+
+# Group 1: Build essentials
+RUN apk update && apk add --no-cache \
     build-base \
     linux-headers \
     git \
     cmake \
-    pkgconfig \
+    pkgconf \
     autoconf \
     automake \
     bc \
     openssl-dev \
-    elfutils-dev \
+    elfutils-dev
+
+# Group 2: Graphics libraries
+RUN apk add --no-cache \
     libdrm-dev \
     mesa-dev \
     mesa-gl \
-    libglvnd-dev \
-    libva-dev \
+    libva-dev
+
+# Group 3: X11
+RUN apk add --no-cache \
     xorg-server \
     xorg-server-dev \
     xinit \
@@ -39,13 +45,17 @@ RUN apk update && \
     libxrender-dev \
     libxfixes-dev \
     libxrandr-dev \
-    libxi-dev \
+    libxi-dev
+
+# Group 4: Window managers
+RUN apk add --no-cache \
     openbox \
-    obconf \
     dmenu \
     i3wm \
-    i3status \
-    i3lock \
+    i3status
+
+# Group 5: System utilities
+RUN apk add --no-cache \
     sudo \
     dbus \
     curl \
