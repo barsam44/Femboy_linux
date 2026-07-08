@@ -31,41 +31,37 @@ jobs:
           echo "iso_name=${ISO_NAME_LOWER}" >> "$GITHUB_OUTPUT"
 
       # ---------------------------------------------------------
-      # Install Alpine mkimage tools
+      # Install Alpine mkimage dependencies
       # ---------------------------------------------------------
-      - name: Install Alpine mkimage tools
+      - name: Install mkimage dependencies
         run: |
           sudo apt update
-          sudo apt install -y alpine-make-vm-image squashfs-tools xorriso
+          sudo apt install -y squashfs-tools xorriso apk-tools curl
+
+      # ---------------------------------------------------------
+      # Download official Alpine mkimage scripts
+      # ---------------------------------------------------------
+      - name: Download mkimage scripts
+        run: |
+          curl -LO https://raw.githubusercontent.com/alpinelinux/alpine-make-vm-image/master/mkimage.sh
+          chmod +x mkimage.sh
 
       # ---------------------------------------------------------
       # Build custom Alpine ISO
       # ---------------------------------------------------------
       - name: Build custom Alpine ISO
-        id: buildiso
         run: |
-          mkdir -p iso
-          alpine-make-vm-image \
-            --branch v${{ env.ALPINE_VERSION }} \
-            --image-format iso \
-            --kernel-version ${{ env.KERNEL_VERSION }} \
+          mkdir iso
+          sudo ./mkimage.sh \
+            --tag v${{ env.ALPINE_VERSION }} \
+            --arch x86_64 \
+            --repository http://dl-cdn.alpinelinux.org/alpine/v${{ env.ALPINE_VERSION }}/main \
+            --profile virt \
             --packages "alpine-base e2fsprogs eudev udev-init-tools \
                         linux-firmware-intel linux-firmware-nvidia \
                         nvidia-${{ env.NVIDIA_DRIVER_VERSION }} \
                         enlightenment" \
             iso/${{ steps.iso.outputs.iso_name }}
-
-      # ---------------------------------------------------------
-      # Build info file
-      # ---------------------------------------------------------
-      - name: Generate build info
-        run: |
-          mkdir -p checksums
-          echo "ISO: ${{ steps.iso.outputs.iso_name }}" > checksums/BUILD_INFO.txt
-          echo "Kernel: ${{ env.KERNEL_VERSION }}" >> checksums/BUILD_INFO.txt
-          echo "Alpine: ${{ env.ALPINE_VERSION }}" >> checksums/BUILD_INFO.txt
-          echo "NVIDIA: ${{ env.NVIDIA_DRIVER_VERSION }}" >> checksums/BUILD_INFO.txt
-          echo "Desktop: Enlightenment" >> checksums/BUILD_INFO.txt
 
       # ---------------------------------------------------------
       # Upload ISO
@@ -80,6 +76,15 @@ jobs:
       # Upload build info
       # ---------------------------------------------------------
       - name: Upload build info
+        run: |
+          mkdir -p checksums
+          echo "ISO: ${{ steps.iso.outputs.iso_name }}" > checksums/BUILD_INFO.txt
+          echo "Kernel: ${{ env.KERNEL_VERSION }}" >> checksums/BUILD_INFO.txt
+          echo "Alpine: ${{ env.ALPINE_VERSION }}" >> checksums/BUILD_INFO.txt
+          echo "NVIDIA: ${{ env.NVIDIA_DRIVER_VERSION }}" >> checksums/BUILD_INFO.txt
+          echo "Desktop: Enlightenment" >> checksums/BUILD_INFO.txt
+
+      - name: Upload build-info
         uses: actions/upload-artifact@v4
         with:
           name: build-info
