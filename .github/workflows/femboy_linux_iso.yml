@@ -20,6 +20,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ---------------------------------------------------------
+      # Generate ISO name
+      # ---------------------------------------------------------
       - name: Generate ISO name
         id: iso
         run: |
@@ -27,14 +30,21 @@ jobs:
           ISO_NAME_LOWER="$(echo "$ISO_NAME" | tr '[:upper:]' '[:lower:]')"
           echo "iso_name=${ISO_NAME_LOWER}" >> "$GITHUB_OUTPUT"
 
+      # ---------------------------------------------------------
+      # Install Alpine mkimage tools
+      # ---------------------------------------------------------
       - name: Install Alpine mkimage tools
         run: |
           sudo apt update
           sudo apt install -y alpine-make-vm-image squashfs-tools xorriso
 
+      # ---------------------------------------------------------
+      # Build custom Alpine ISO
+      # ---------------------------------------------------------
       - name: Build custom Alpine ISO
+        id: buildiso
         run: |
-          mkdir build
+          mkdir -p iso
           alpine-make-vm-image \
             --branch v${{ env.ALPINE_VERSION }} \
             --image-format iso \
@@ -43,13 +53,37 @@ jobs:
                         linux-firmware-intel linux-firmware-nvidia \
                         nvidia-${{ env.NVIDIA_DRIVER_VERSION }} \
                         enlightenment" \
-            build/${{ steps.iso.outputs.iso_name }}
+            iso/${{ steps.iso.outputs.iso_name }}
 
+      # ---------------------------------------------------------
+      # Build info file
+      # ---------------------------------------------------------
+      - name: Generate build info
+        run: |
+          mkdir -p checksums
+          echo "ISO: ${{ steps.iso.outputs.iso_name }}" > checksums/BUILD_INFO.txt
+          echo "Kernel: ${{ env.KERNEL_VERSION }}" >> checksums/BUILD_INFO.txt
+          echo "Alpine: ${{ env.ALPINE_VERSION }}" >> checksums/BUILD_INFO.txt
+          echo "NVIDIA: ${{ env.NVIDIA_DRIVER_VERSION }}" >> checksums/BUILD_INFO.txt
+          echo "Desktop: Enlightenment" >> checksums/BUILD_INFO.txt
+
+      # ---------------------------------------------------------
+      # Upload ISO
+      # ---------------------------------------------------------
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.iso.outputs.iso_name }}
-          path: build/${{ steps.iso.outputs.iso_name }}
+          path: iso/${{ steps.iso.outputs.iso_name }}
+
+      # ---------------------------------------------------------
+      # Upload build info
+      # ---------------------------------------------------------
+      - name: Upload build info
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info
+          path: checksums/
 
   test:
     needs: build
