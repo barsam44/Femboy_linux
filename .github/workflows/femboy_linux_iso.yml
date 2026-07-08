@@ -1,0 +1,59 @@
+name: Build Alpine Linux + NVIDIA 580 + Intel + Enlightenment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  KERNEL_VERSION: 5.15.167
+  NVIDIA_DRIVER_VERSION: 580.04
+  ALPINE_VERSION: 3.18
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      iso_name: ${{ steps.iso.outputs.iso_name }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate ISO name
+        id: iso
+        run: |
+          ISO_NAME="alpine-${{ env.ALPINE_VERSION }}-kernel${{ env.KERNEL_VERSION }}-nvidia${{ env.NVIDIA_DRIVER_VERSION }}-intel-enlightenment.iso"
+          ISO_NAME_LOWER="$(echo "$ISO_NAME" | tr '[:upper:]' '[:lower:]')"
+          echo "iso_name=${ISO_NAME_LOWER}" >> "$GITHUB_OUTPUT"
+
+      - name: Install Alpine mkimage tools
+        run: |
+          sudo apt update
+          sudo apt install -y alpine-make-vm-image squashfs-tools xorriso
+
+      - name: Build custom Alpine ISO
+        run: |
+          mkdir build
+          alpine-make-vm-image \
+            --branch v${{ env.ALPINE_VERSION }} \
+            --image-format iso \
+            --kernel-version ${{ env.KERNEL_VERSION }} \
+            --packages "alpine-base e2fsprogs eudev udev-init-tools \
+                        linux-firmware-intel linux-firmware-nvidia \
+                        nvidia-${{ env.NVIDIA_DRIVER_VERSION }} \
+                        enlightenment" \
+            build/${{ steps.iso.outputs.iso_name }}
+
+      - name: Upload ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.iso.outputs.iso_name }}
+          path: build/${{ steps.iso.outputs.iso_name }}
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print ISO name
+        run: echo "Built ISO: ${{ needs.build.outputs.iso_name }}"
