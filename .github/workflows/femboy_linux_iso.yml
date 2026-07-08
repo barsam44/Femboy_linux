@@ -1,4 +1,4 @@
-name: Build Alpine Linux + NVIDIA 580 + Intel + Enlightenment
+name: Build Alpine Linux ISO
 
 on:
   push:
@@ -13,78 +13,54 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    outputs:
-      iso_name: ${{ steps.iso.outputs.iso_name }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ---------------------------------------------------------
-      # Generate ISO name
-      # ---------------------------------------------------------
       - name: Generate ISO name
         id: iso
         run: |
           ISO_NAME="alpine-${{ env.ALPINE_VERSION }}-kernel${{ env.KERNEL_VERSION }}-nvidia${{ env.NVIDIA_DRIVER_VERSION }}-intel-enlightenment.iso"
-          ISO_NAME_LOWER="$(echo "$ISO_NAME" | tr '[:upper:]' '[:lower:]')"
-          echo "iso_name=${ISO_NAME_LOWER}" >> "$GITHUB_OUTPUT"
+          echo "iso_name=$(echo "$ISO_NAME" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
-      # ---------------------------------------------------------
-      # Build ISO inside Alpine container
-      # ---------------------------------------------------------
-      - name: Build ISO inside Alpine
+      - name: Install QEMU
         run: |
-          docker run --rm -v $PWD:/workspace -w /workspace alpine:${{ env.ALPINE_VERSION }} sh -eux << 'EOF'
-            apk update
-            apk add alpine-make-vm-image squashfs-tools xorriso curl eudev udev-init-tools \
-                    linux-firmware-intel linux-firmware-nvidia \
-                    nvidia-${{ env.NVIDIA_DRIVER_VERSION }} \
-                    enlightenment
+          sudo apt update
+          sudo apt install -y qemu-system-x86 qemu-utils
 
-            mkdir -p iso
+      - name: Download Alpine Mini RootFS
+        run: |
+          wget https://dl-cdn.alpinelinux.org/alpine/v${{ env.ALPINE_VERSION }}/releases/x86_64/alpine-minirootfs-${{ env.ALPINE_VERSION }}.0-x86_64.tar.gz
+          mkdir rootfs
+          sudo tar -xzf alpine-minirootfs-${{ env.ALPINE_VERSION }}.0-x86_64.tar.gz -C rootfs
 
-            alpine-make-vm-image \
-              --branch v${{ env.ALPINE_VERSION }} \
-              --image-format iso \
-              --kernel-version ${{ env.KERNEL_VERSION }} \
-              --packages "alpine-base e2fsprogs eudev udev-init-tools \
-                          linux-firmware-intel linux-firmware-nvidia \
-                          nvidia-${{ env.NVIDIA_DRIVER_VERSION }} \
-                          enlightenment" \
-              iso/${{ steps.iso.outputs.iso_name }}
-          EOF
+      - name: Create VM disk
+        run: |
+          qemu-img create -f qcow2 alpine.qcow2 4G
 
-      # ---------------------------------------------------------
-      # Upload ISO
-      # ---------------------------------------------------------
+      - name: Boot Alpine VM and build ISO
+        run: |
+          qemu-system-x86_64 \
+            -m 2048 \
+            -smp 2 \
+            -nographic \
+            -kernel rootfs/boot/vmlinuz-lts \
+            -initrd rootfs/boot/initramfs-lts \
+            -append "console=ttyS0 root=/dev/ram0" \
+            -drive file=alpine.qcow2,format=qcow2 \
+            -virtfs local,path=$PWD,mount_tag=host0,security_model=none \
+            -no-reboot \
+            -serial mon:stdio \
+            -serial file:vm.log
+
+      - name: Extract ISO from VM
+        run: |
+          mkdir iso
+          cp alpine.qcow2 iso/${{ steps.iso.outputs.iso_name }}
+
       - name: Upload ISO
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.iso.outputs.iso_name }}
           path: iso/${{ steps.iso.outputs.iso_name }}
-
-      # ---------------------------------------------------------
-      # Upload build info
-      # ---------------------------------------------------------
-      - name: Upload build-info
-        run: |
-          mkdir -p checksums
-          echo "ISO: ${{ steps.iso.outputs.iso_name }}" > checksums/BUILD_INFO.txt
-          echo "Kernel: ${{ env.KERNEL_VERSION }}" >> checksums/BUILD_INFO.txt
-          echo "Alpine: ${{ env.ALPINE_VERSION }}" >> checksums/BUILD_INFO.txt
-          echo "NVIDIA: ${{ env.NVIDIA_DRIVER_VERSION }}" >> checksums/BUILD_INFO.txt
-          echo "Desktop: Enlightenment" >> checksums/BUILD_INFO.txt
-
-      - name: Upload build-info artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-info
-          path: checksums/
-
-  test:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - name: Print ISO name
-        run: echo "Built ISO: ${{ needs.build.outputs.iso_name }}"
